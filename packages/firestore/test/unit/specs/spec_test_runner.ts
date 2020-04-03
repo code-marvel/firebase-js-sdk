@@ -27,9 +27,7 @@ import {
 import { Query } from '../../../src/core/query';
 import { SnapshotVersion } from '../../../src/core/snapshot_version';
 import { SyncEngine } from '../../../src/core/sync_engine';
-import {
-  TargetId
-} from '../../../src/core/types';
+import { TargetId } from '../../../src/core/types';
 import {
   ChangeType,
   DocumentViewChange,
@@ -46,16 +44,14 @@ import {
   SchemaConverter
 } from '../../../src/local/indexeddb_schema';
 import { LocalStore } from '../../../src/local/local_store';
-import {
-  MemoryPersistenceProvider
-} from '../../../src/local/memory_persistence';
+import { MemoryPersistenceProvider } from '../../../src/local/memory_persistence';
 import {
   Persistence,
   PersistenceProvider
 } from '../../../src/local/persistence';
 import {
   ClientId,
-  SharedClientState,
+  SharedClientState
 } from '../../../src/local/shared_client_state';
 import { SimpleDb } from '../../../src/local/simple_db';
 import { TargetData, TargetPurpose } from '../../../src/local/target_data';
