@@ -58,6 +58,10 @@ import {
   SharedClientState
 } from './shared_client_state';
 import { TargetData } from './target_data';
+import { SyncEngine } from '../core/sync_engine';
+import { LocalStore } from './local_store';
+import { RemoteStore } from '../remote/remote_store';
+import { QueryEngine } from './query_engine';
 
 const LOG_TAG = 'MemoryPersistence';
 
@@ -548,5 +552,30 @@ export class MemoryPersistenceProvider implements PersistenceProvider {
       Code.FAILED_PRECONDITION,
       MEMORY_ONLY_PERSISTENCE_ERROR_MESSAGE
     );
+  }
+
+  newLocalStore(
+    persistence: Persistence,
+    queryEngine: QueryEngine,
+    initialUser: User
+  ): LocalStore {
+    return new LocalStore(persistence, queryEngine, initialUser);
+  }
+
+  newSyncEngine(
+    localStore: LocalStore,
+    remoteStore: RemoteStore,
+    sharedClientState: SharedClientState,
+    currentUser: User,
+    maxConcurrentLimboResolutions: number
+  ): Promise<SyncEngine> {
+    const syncEngine = new SyncEngine(
+      localStore,
+      remoteStore,
+      sharedClientState,
+      currentUser,
+      maxConcurrentLimboResolutions
+    );
+    return Promise.resolve(syncEngine);
   }
 }

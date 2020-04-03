@@ -179,7 +179,7 @@ export class FirestoreClient {
           user,
           persistenceResult
         )
-          .then(() => this.initializeRest(user))
+          .then(() => this.initializeRest(persistenceProvider, user))
           .then(initializationDone.resolve, initializationDone.reject);
       } else {
         this.asyncQueue.enqueueAndForget(() => {
@@ -324,13 +324,20 @@ export class FirestoreClient {
    * has been obtained from the credential provider and some persistence
    * implementation is available in this.persistence.
    */
-  private initializeRest(user: User): Promise<void> {
+  private initializeRest(
+    persistenceProvider: PersistenceProvider,
+    user: User
+  ): Promise<void> {
     logDebug(LOG_TAG, 'Initializing. user=', user.uid);
     return this.platform
       .loadConnection(this.databaseInfo)
       .then(async connection => {
         const queryEngine = new IndexFreeQueryEngine();
-        this.localStore = new LocalStore(this.persistence, queryEngine, user);
+        this.localStore = persistenceProvider.newLocalStore(
+          this.persistence,
+          queryEngine,
+          user
+        );
         await this.localStore.start();
         const connectivityMonitor = this.platform.newConnectivityMonitor();
         const serializer = this.platform.newSerializer(
@@ -366,7 +373,7 @@ export class FirestoreClient {
           connectivityMonitor
         );
 
-        this.syncEngine = new SyncEngine(
+        this.syncEngine = await persistenceProvider.newSyncEngine(
           this.localStore,
           this.remoteStore,
           this.sharedClientState,
@@ -378,24 +385,13 @@ export class FirestoreClient {
 
         // Set up wiring between sync engine and other components
         this.remoteStore.syncEngine = this.syncEngine;
-        this.sharedClientState.syncEngine = this.syncEngine;
+        //this.sharedClientState.syncEngine = this.syncEngine;
 
         this.eventMgr = new EventManager(this.syncEngine);
 
         // PORTING NOTE: LocalStore doesn't need an explicit start() on the Web.
         await this.sharedClientState.start();
         await this.remoteStore.start();
-
-        // NOTE: This will immediately call the listener, so we make sure to
-        // set it after localStore / remoteStore are started.
-        await this.persistence.setPrimaryStateListener(async isPrimary => {
-          await this.syncEngine.applyPrimaryState(isPrimary);
-          if (isPrimary && !this.gcScheduler.started) {
-            this.gcScheduler.start(this.localStore);
-          } else if (!isPrimary) {
-            this.gcScheduler.stop();
-          }
-        });
 
         // When a user calls clearPersistence() in one client, all other clients
         // need to be terminated to allow the delete to succeed.

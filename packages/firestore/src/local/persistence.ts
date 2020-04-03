@@ -32,6 +32,9 @@ import { DatabaseInfo } from '../core/database_info';
 import { PersistenceSettings } from '../core/firestore_client';
 import { Platform } from '../platform/platform';
 import { AsyncQueue } from '../util/async_queue';
+import { SyncEngine } from '../core/sync_engine';
+import { RemoteStore } from '../remote/remote_store';
+import { QueryEngine } from './query_engine';
 
 export const PRIMARY_LEASE_LOST_ERROR_MSG =
   'The current tab is not in the required state to perform this operation. ' +
@@ -319,4 +322,18 @@ export interface PersistenceProvider {
   getSharedClientState(): SharedClientState;
 
   clearPersistence(databaseId: DatabaseInfo): Promise<void>;
+
+  newLocalStore(
+    persistence: Persistence,
+    queryEngine: QueryEngine,
+    initialUser: User
+  ): LocalStore;
+
+  newSyncEngine(
+    localStore: LocalStore,
+    remoteStore: RemoteStore,
+    sharedClientState: SharedClientState,
+    currentUser: User,
+    maxConcurrentLimboResolutions: number
+  ): Promise<SyncEngine>;
 }

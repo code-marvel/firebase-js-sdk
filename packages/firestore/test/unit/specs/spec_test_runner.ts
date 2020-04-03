@@ -26,7 +26,7 @@ import {
 } from '../../../src/core/event_manager';
 import { Query } from '../../../src/core/query';
 import { SnapshotVersion } from '../../../src/core/snapshot_version';
-import { SyncEngine } from '../../../src/core/sync_engine';
+import { MultiTabSyncEngine } from '../../../src/core/sync_engine';
 import {
   OnlineState,
   OnlineStateSource,
@@ -45,7 +45,7 @@ import {
   SCHEMA_VERSION,
   SchemaConverter
 } from '../../../src/local/indexeddb_schema';
-import { LocalStore } from '../../../src/local/local_store';
+import { MultiTabLocalStore } from '../../../src/local/local_store';
 import { LruParams } from '../../../src/local/lru_garbage_collector';
 import {
   MemoryEagerDelegate,
@@ -399,7 +399,7 @@ abstract class TestRunner {
   // Initialized asynchronously via start().
   private connection!: MockConnection;
   private eventManager!: EventManager;
-  private syncEngine!: SyncEngine;
+  private syncEngine!: MultiTabSyncEngine;
 
   private eventList: QueryEvent[] = [];
   private acknowledgedDocs: string[];
@@ -419,7 +419,7 @@ abstract class TestRunner {
 
   // Initialized asynchronously via start().
   private datastore!: Datastore;
-  private localStore!: LocalStore;
+  private localStore!: MultiTabLocalStore;
   private remoteStore!: RemoteStore;
   private persistence!: Persistence;
   protected sharedClientState!: SharedClientState;
@@ -477,7 +477,11 @@ abstract class TestRunner {
     );
 
     const queryEngine = new IndexFreeQueryEngine();
-    this.localStore = new LocalStore(this.persistence, queryEngine, this.user);
+    this.localStore = new MultiTabLocalStore(
+      this.persistence,
+      queryEngine,
+      this.user
+    );
     await this.localStore.start();
 
     this.connection = new MockConnection(this.queue);
@@ -511,7 +515,7 @@ abstract class TestRunner {
       remoteStoreOnlineStateChangedHandler,
       connectivityMonitor
     );
-    this.syncEngine = new SyncEngine(
+    this.syncEngine = new MultiTabSyncEngine(
       this.localStore,
       this.remoteStore,
       this.sharedClientState,

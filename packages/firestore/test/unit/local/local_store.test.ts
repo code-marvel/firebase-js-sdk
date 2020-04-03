@@ -27,7 +27,11 @@ import { TargetId, BatchId } from '../../../src/core/types';
 import { SnapshotVersion } from '../../../src/core/snapshot_version';
 import { IndexFreeQueryEngine } from '../../../src/local/index_free_query_engine';
 import { IndexedDbPersistence } from '../../../src/local/indexeddb_persistence';
-import { LocalStore, LocalWriteResult } from '../../../src/local/local_store';
+import {
+  LocalStore,
+  LocalWriteResult,
+  MultiTabLocalStore
+} from '../../../src/local/local_store';
 import { LocalViewChanges } from '../../../src/local/local_view_changes';
 import { Persistence } from '../../../src/local/persistence';
 import { QueryEngine } from '../../../src/local/query_engine';
@@ -445,7 +449,7 @@ function genericLocalStoreTests(
   beforeEach(async () => {
     persistence = await getPersistence();
     countingQueryEngine = new CountingQueryEngine(queryEngine);
-    localStore = new LocalStore(
+    localStore = new MultiTabLocalStore(
       persistence,
       countingQueryEngine,
       User.UNAUTHENTICATED

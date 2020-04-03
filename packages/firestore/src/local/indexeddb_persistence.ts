@@ -84,6 +84,10 @@ import {
 } from './shared_client_state';
 import { TargetData } from './target_data';
 import { SimpleDb, SimpleDbStore, SimpleDbTransaction } from './simple_db';
+import { LocalStore, MultiTabLocalStore } from './local_store';
+import { RemoteStore } from '../remote/remote_store';
+import { MultiTabSyncEngine, SyncEngine } from '../core/sync_engine';
+import { QueryEngine } from './query_engine';
 
 const LOG_TAG = 'IndexedDbPersistence';
 
@@ -1385,5 +1389,41 @@ export class IndexedDbPersistenceProvider implements PersistenceProvider {
       databaseInfo
     );
     return IndexedDbPersistence.clearPersistence(persistenceKey);
+  }
+
+  newLocalStore(
+    persistence: Persistence,
+    queryEngine: QueryEngine,
+    initialUser: User
+  ): LocalStore {
+    return new MultiTabLocalStore(persistence, queryEngine, initialUser);
+  }
+  async newSyncEngine(
+    localStore: LocalStore,
+    remoteStore: RemoteStore,
+    sharedClientState: SharedClientState,
+    currentUser: User,
+    maxConcurrentLimboResolutions: number
+  ): Promise<SyncEngine> {
+    const syncEngine = new MultiTabSyncEngine(
+      localStore as MultiTabLocalStore,
+      remoteStore,
+      sharedClientState,
+      currentUser,
+      maxConcurrentLimboResolutions
+    );
+
+    // NOTE: This will immediately call the listener, so we make sure to
+    // set it after localStore / remoteStore are started.
+    await this.persistence!.setPrimaryStateListener(async isPrimary => {
+      await syncEngine.applyPrimaryState(isPrimary);
+      if (isPrimary && !this.gcScheduler!.started) {
+        this.gcScheduler!.start(localStore);
+      } else if (!isPrimary) {
+        this.gcScheduler!.stop();
+      }
+    });
+
+    return syncEngine;
   }
 }
