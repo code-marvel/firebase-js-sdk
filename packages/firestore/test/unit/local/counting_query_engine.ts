@@ -30,6 +30,7 @@ import { DocumentKeySet, DocumentMap } from '../../../src/model/collections';
  * of documents and mutations read.
  */
 export class CountingQueryEngine implements QueryEngine {
+  
   /**
    * The number of mutations returned by the MutationQueue's
    * `getAllMutationBatchesAffectingQuery()` API (since the last call to
@@ -57,7 +58,7 @@ export class CountingQueryEngine implements QueryEngine {
    */
   documentsReadByKey = 0;
 
-  constructor(private readonly queryEngine: QueryEngine) {}
+  constructor(private readonly queryEngine: QueryEngine, readonly type: 'index-free'|'simple') {}
 
   resetCounts(): void {
     this.mutationsReadByQuery = 0;
@@ -114,8 +115,6 @@ export class CountingQueryEngine implements QueryEngine {
           return result;
         });
       },
-      getNewDocumentChanges: subject.getNewDocumentChanges,
-      getLastReadTime: subject.getLastReadTime,
       getSize: subject.getSize,
       newChangeBuffer: subject.newChangeBuffer
     };
@@ -164,9 +163,7 @@ export class CountingQueryEngine implements QueryEngine {
       getNextMutationBatchAfterBatchId:
         subject.getNextMutationBatchAfterBatchId,
       lookupMutationBatch: subject.lookupMutationBatch,
-      lookupMutationKeys: subject.lookupMutationKeys,
       performConsistencyCheck: subject.performConsistencyCheck,
-      removeCachedMutationKeys: subject.removeCachedMutationKeys,
       removeMutationBatch: subject.removeMutationBatch,
       setLastStreamToken: subject.setLastStreamToken
     };

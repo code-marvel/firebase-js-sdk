@@ -81,29 +81,7 @@ export interface RemoteDocumentCache {
     query: Query,
     sinceReadTime: SnapshotVersion
   ): PersistencePromise<DocumentMap>;
-
-  /**
-   * Returns the set of documents that have changed since the specified read
-   * time.
-   */
-  // PORTING NOTE: This is only used for multi-tab synchronization.
-  getNewDocumentChanges(
-    transaction: PersistenceTransaction,
-    sinceReadTime: SnapshotVersion
-  ): PersistencePromise<{
-    changedDocs: MaybeDocumentMap;
-    readTime: SnapshotVersion;
-  }>;
-
-  /**
-   * Returns the read time of the most recently read document in the cache, or
-   * SnapshotVersion.MIN if not available.
-   */
-  // PORTING NOTE: This is only used for multi-tab synchronization.
-  getLastReadTime(
-    transaction: PersistenceTransaction
-  ): PersistencePromise<SnapshotVersion>;
-
+  
   /**
    * Provides access to add or update the contents of the cache. The buffer
    * handles proper size accounting for the change.

@@ -126,14 +126,13 @@ export async function testIndexedDbPersistence(
 
 /** Creates and starts a MemoryPersistence instance for testing. */
 export async function testMemoryEagerPersistence(): Promise<MemoryPersistence> {
-  return new MemoryPersistence(AutoId.newId(), p => new MemoryEagerDelegate(p));
+  return new MemoryPersistence( p => new MemoryEagerDelegate(p));
 }
 
 export async function testMemoryLruPersistence(
   params: LruParams = LruParams.DEFAULT
 ): Promise<MemoryPersistence> {
   return new MemoryPersistence(
-    AutoId.newId(),
     p => new MemoryLruDelegate(p, params)
   );
 }

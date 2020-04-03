@@ -17,7 +17,6 @@
 
 import { CredentialsProvider } from '../api/credentials';
 import { User } from '../auth/user';
-import { IndexFreeQueryEngine } from '../local/index_free_query_engine';
 import { LocalStore } from '../local/local_store';
 import { MemoryPersistenceProvider } from '../local/memory_persistence';
 import {
@@ -172,14 +171,15 @@ export class FirestoreClient {
     this.credentials.setChangeListener(user => {
       if (!initialized) {
         initialized = true;
-
+        
+        logDebug(LOG_TAG, 'Initializing. user=', user.uid);
         this.initializePersistence(
           persistenceProvider,
           persistenceSettings,
           user,
           persistenceResult
         )
-          .then(() => this.initializeRest(persistenceProvider, user))
+          .then(() => this.initializeRest(persistenceProvider))
           .then(initializationDone.resolve, initializationDone.reject);
       } else {
         this.asyncQueue.enqueueAndForget(() => {
@@ -236,15 +236,16 @@ export class FirestoreClient {
     try {
       await persistenceProvider.initialize(
         this.asyncQueue,
+        this.remoteStore,
         this.databaseInfo,
         this.platform,
         this.clientId,
         user,
+        MAX_CONCURRENT_LIMBO_RESOLUTIONS,
         persistenceSettings
       );
 
       this.persistence = persistenceProvider.getPersistence();
-      this.gcScheduler = persistenceProvider.getGarbageCollectionScheduler();
       this.sharedClientState = persistenceProvider.getSharedClientState();
       persistenceResult.resolve();
     } catch (error) {
@@ -325,20 +326,12 @@ export class FirestoreClient {
    * implementation is available in this.persistence.
    */
   private initializeRest(
-    persistenceProvider: PersistenceProvider,
-    user: User
+    persistenceProvider: PersistenceProvider
   ): Promise<void> {
-    logDebug(LOG_TAG, 'Initializing. user=', user.uid);
     return this.platform
       .loadConnection(this.databaseInfo)
       .then(async connection => {
-        const queryEngine = new IndexFreeQueryEngine();
-        this.localStore = persistenceProvider.newLocalStore(
-          this.persistence,
-          queryEngine,
-          user
-        );
-        await this.localStore.start();
+        this.localStore = persistenceProvider.getLocalStore();
         const connectivityMonitor = this.platform.newConnectivityMonitor();
         const serializer = this.platform.newSerializer(
           this.databaseInfo.databaseId
@@ -357,13 +350,6 @@ export class FirestoreClient {
             onlineState,
             OnlineStateSource.RemoteStore
           );
-        const sharedClientStateOnlineStateChangedHandler = (
-          onlineState: OnlineState
-        ): void =>
-          this.syncEngine.applyOnlineStateChange(
-            onlineState,
-            OnlineStateSource.SharedClientState
-          );
 
         this.remoteStore = new RemoteStore(
           this.localStore,
@@ -373,19 +359,7 @@ export class FirestoreClient {
           connectivityMonitor
         );
 
-        this.syncEngine = await persistenceProvider.newSyncEngine(
-          this.localStore,
-          this.remoteStore,
-          this.sharedClientState,
-          user,
-          MAX_CONCURRENT_LIMBO_RESOLUTIONS
-        );
-
-        this.sharedClientState.onlineStateHandler = sharedClientStateOnlineStateChangedHandler;
-
-        // Set up wiring between sync engine and other components
-        this.remoteStore.syncEngine = this.syncEngine;
-        //this.sharedClientState.syncEngine = this.syncEngine;
+        this.syncEngine = await persistenceProvider.getSyncEngine();
 
         this.eventMgr = new EventManager(this.syncEngine);
 

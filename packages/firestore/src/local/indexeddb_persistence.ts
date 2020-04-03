@@ -19,7 +19,12 @@ import { User } from '../auth/user';
 import { DatabaseInfo } from '../core/database_info';
 import { PersistenceSettings } from '../core/firestore_client';
 import { ListenSequence, SequenceNumberSyncer } from '../core/listen_sequence';
-import { ListenSequenceNumber, TargetId } from '../core/types';
+import {
+  ListenSequenceNumber,
+  OnlineState,
+  OnlineStateSource,
+  TargetId
+} from '../core/types';
 import { DocumentKey } from '../model/document_key';
 import { Platform, PlatformSupport } from '../platform/platform';
 import { JsonProtoSerializer } from '../remote/serializer';
@@ -88,6 +93,7 @@ import { LocalStore, MultiTabLocalStore } from './local_store';
 import { RemoteStore } from '../remote/remote_store';
 import { MultiTabSyncEngine, SyncEngine } from '../core/sync_engine';
 import { QueryEngine } from './query_engine';
+import {IndexFreeQueryEngine} from "./index_free_query_engine";
 
 const LOG_TAG = 'IndexedDbPersistence';
 
@@ -351,7 +357,14 @@ export class IndexedDbPersistence implements Persistence {
         return Promise.reject(reason);
       });
   }
-
+  
+  /**
+   * Registers a listener that gets called when the primary state of the
+   * instance changes. Upon registering, this listener is invoked immediately
+   * with the current primary state.
+   *
+   * PORTING NOTE: This is only used for Web multi-tab.
+   */
   setPrimaryStateListener(
     primaryStateListener: PrimaryStateListener
   ): Promise<void> {
@@ -363,6 +376,12 @@ export class IndexedDbPersistence implements Persistence {
     return primaryStateListener(this.isPrimary);
   }
 
+  /**
+   * Registers a listener that gets called when the database receives a
+   * version change event indicating that it has deleted.
+   *
+   * PORTING NOTE: This is only used for Web multi-tab.
+   */
   setDatabaseDeletedListener(
     databaseDeletedListener: () => Promise<void>
   ): void {
@@ -374,6 +393,12 @@ export class IndexedDbPersistence implements Persistence {
     });
   }
 
+  /**
+   * Adjusts the current network state in the client's metadata, potentially
+   * affecting the primary lease.
+   *
+   * PORTING NOTE: This is only used for Web multi-tab.
+   */
   setNetworkEnabled(networkEnabled: boolean): void {
     if (this.networkEnabled !== networkEnabled) {
       this.networkEnabled = networkEnabled;
@@ -694,7 +719,14 @@ export class IndexedDbPersistence implements Persistence {
         !this.isClientZombied(client.clientId)
     );
   }
-
+  
+  /**
+   * Returns the IDs of the clients that are currently active. If multi-tab
+   * is not supported, returns an array that only contains the local client's
+   * ID.
+   *
+   * PORTING NOTE: This is only used for Web multi-tab.
+   */
   getActiveClients(): Promise<ClientId[]> {
     return this.simpleDb.runTransaction(
       'readonly',
@@ -723,7 +755,7 @@ export class IndexedDbPersistence implements Persistence {
     return this._started;
   }
 
-  getMutationQueue(user: User): MutationQueue {
+  getMutationQueue(user: User): IndexedDbMutationQueue {
     assert(
       this.started,
       'Cannot initialize MutationQueue before persistence is started.'
@@ -1309,16 +1341,20 @@ function writeSentinelKey(
  * Provides all components needed for IndexedDb persistence.
  */
 export class IndexedDbPersistenceProvider implements PersistenceProvider {
-  private persistence?: IndexedDbPersistence;
-  private gcScheduler?: GarbageCollectionScheduler;
-  private sharedClientState?: SharedClientState;
+  private persistence!: IndexedDbPersistence;
+  private sharedClientState!: SharedClientState;
+  private localStore!: MultiTabLocalStore;
+  private syncEngine!: MultiTabSyncEngine;
+  private gcScheduler!: GarbageCollectionScheduler;
 
   async initialize(
     asyncQueue: AsyncQueue,
+    remoteStore: RemoteStore,
     databaseInfo: DatabaseInfo,
     platform: Platform,
     clientId: ClientId,
     initialUser: User,
+    maxConcurrentLimboResolutions: number,
     settings: PersistenceSettings
   ): Promise<void> {
     assert(
@@ -1367,6 +1403,47 @@ export class IndexedDbPersistenceProvider implements PersistenceProvider {
     const garbageCollector = this.persistence.referenceDelegate
       .garbageCollector;
     this.gcScheduler = new LruScheduler(garbageCollector, asyncQueue);
+
+
+    this.localStore = new MultiTabLocalStore(this.persistence, new IndexFreeQueryEngine(), initialUser);
+    await this.localStore.start();
+
+    this.syncEngine = new MultiTabSyncEngine(
+      this.localStore,
+      remoteStore,
+      this.sharedClientState,
+      initialUser,
+      maxConcurrentLimboResolutions
+    );
+
+    // NOTE: This will immediately call the listener, so we make sure to
+    // set it after localStore / remoteStore are started.
+    await this.persistence!.setPrimaryStateListener(async isPrimary => {
+      await this.syncEngine.applyPrimaryState(isPrimary);
+      if (isPrimary && !this.gcScheduler.started) {
+        this.gcScheduler.start(this.localStore);
+      } else if (!isPrimary) {
+        this.gcScheduler.stop();
+      }
+    });
+
+    this.sharedClientState.onlineStateHandler = (
+      onlineState: OnlineState
+    ): void =>
+      this.syncEngine.applyOnlineStateChange(
+        onlineState,
+        OnlineStateSource.SharedClientState
+      );
+
+
+    this.sharedClientState.syncEngine = this.syncEngine;
+this.sharedClientState.start();
+
+    // Set up wiring between sync engine and other components
+    remoteStore.syncEngine = this.syncEngine;
+    
+   await  this.localStore.start();
+
   }
 
   getPersistence(): Persistence {
@@ -1378,10 +1455,20 @@ export class IndexedDbPersistenceProvider implements PersistenceProvider {
     assert(!!this.sharedClientState, 'initialize() not called');
     return this.sharedClientState;
   }
-
+  
   getGarbageCollectionScheduler(): GarbageCollectionScheduler {
     assert(!!this.gcScheduler, 'initialize() not called');
     return this.gcScheduler;
+  }
+
+  getLocalStore(): LocalStore {
+    assert(!!this.localStore, 'initialize() not called');
+    return this.localStore;
+  }
+
+  getSyncEngine(): SyncEngine {
+    assert(!!this.syncEngine, 'initialize() not called');
+    return this.syncEngine;
   }
 
   clearPersistence(databaseInfo: DatabaseInfo): Promise<void> {
@@ -1389,41 +1476,5 @@ export class IndexedDbPersistenceProvider implements PersistenceProvider {
       databaseInfo
     );
     return IndexedDbPersistence.clearPersistence(persistenceKey);
-  }
-
-  newLocalStore(
-    persistence: Persistence,
-    queryEngine: QueryEngine,
-    initialUser: User
-  ): LocalStore {
-    return new MultiTabLocalStore(persistence, queryEngine, initialUser);
-  }
-  async newSyncEngine(
-    localStore: LocalStore,
-    remoteStore: RemoteStore,
-    sharedClientState: SharedClientState,
-    currentUser: User,
-    maxConcurrentLimboResolutions: number
-  ): Promise<SyncEngine> {
-    const syncEngine = new MultiTabSyncEngine(
-      localStore as MultiTabLocalStore,
-      remoteStore,
-      sharedClientState,
-      currentUser,
-      maxConcurrentLimboResolutions
-    );
-
-    // NOTE: This will immediately call the listener, so we make sure to
-    // set it after localStore / remoteStore are started.
-    await this.persistence!.setPrimaryStateListener(async isPrimary => {
-      await syncEngine.applyPrimaryState(isPrimary);
-      if (isPrimary && !this.gcScheduler!.started) {
-        this.gcScheduler!.start(localStore);
-      } else if (!isPrimary) {
-        this.gcScheduler!.stop();
-      }
-    });
-
-    return syncEngine;
   }
 }

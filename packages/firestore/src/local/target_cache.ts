@@ -134,19 +134,6 @@ export interface TargetCache {
   ): PersistencePromise<TargetData | null>;
 
   /**
-   * Looks up a TargetData entry by target ID.
-   *
-   * @param targetId The target ID of the TargetData entry to look up.
-   * @return The cached TargetData entry, or null if the cache has no entry for
-   * the target.
-   */
-  // PORTING NOTE: Multi-tab only.
-  getTargetDataForTarget(
-    txn: PersistenceTransaction,
-    targetId: TargetId
-  ): PersistencePromise<TargetData | null>;
-
-  /**
    * Adds the given document keys to cached query results of the given target
    * ID.
    *

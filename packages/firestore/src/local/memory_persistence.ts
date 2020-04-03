@@ -61,7 +61,7 @@ import { TargetData } from './target_data';
 import { SyncEngine } from '../core/sync_engine';
 import { LocalStore } from './local_store';
 import { RemoteStore } from '../remote/remote_store';
-import { QueryEngine } from './query_engine';
+import {IndexFreeQueryEngine} from "./index_free_query_engine";
 
 const LOG_TAG = 'MemoryPersistence';
 
@@ -99,7 +99,6 @@ export class MemoryPersistence implements Persistence {
    * checked or asserted on every access.
    */
   constructor(
-    private readonly clientId: ClientId,
     referenceDelegateFactory: (p: MemoryPersistence) => MemoryReferenceDelegate
   ) {
     this._started = true;
@@ -124,25 +123,10 @@ export class MemoryPersistence implements Persistence {
     return this._started;
   }
 
-  async getActiveClients(): Promise<ClientId[]> {
-    return [this.clientId];
-  }
-
-  setPrimaryStateListener(
-    primaryStateListener: PrimaryStateListener
-  ): Promise<void> {
-    // All clients using memory persistence act as primary.
-    return primaryStateListener(true);
-  }
-
   setDatabaseDeletedListener(): void {
     // No op.
   }
-
-  setNetworkEnabled(networkEnabled: boolean): void {
-    // No op.
-  }
-
+  
   getIndexManager(): MemoryIndexManager {
     return this.indexManager;
   }
@@ -506,14 +490,20 @@ export class MemoryLruDelegate implements ReferenceDelegate, LruDelegate {
 }
 
 export class MemoryPersistenceProvider implements PersistenceProvider {
-  private clientId: ClientId | undefined;
+  private clientId!: ClientId;
+  private localStore!: LocalStore;
+  private persistence!: MemoryPersistence;
+  private syncEngine!: SyncEngine;
+  private sharedClientState!: MemorySharedClientState;
 
   initialize(
     asyncQueue: AsyncQueue,
+    remoteStore: RemoteStore,
     databaseInfo: DatabaseInfo,
     platform: Platform,
     clientId: ClientId,
     initialUser: User,
+    maxConcurrentLimboResolutions: number,
     settings: PersistenceSettings
   ): Promise<void> {
     if (settings.durable) {
@@ -523,6 +513,19 @@ export class MemoryPersistenceProvider implements PersistenceProvider {
       );
     }
     this.clientId = clientId;
+    this.persistence = new MemoryPersistence(
+      p => new MemoryEagerDelegate(p)
+    );
+    this.sharedClientState = new MemorySharedClientState();
+    this.localStore = new LocalStore(this.persistence, new IndexFreeQueryEngine(), initialUser);
+    this.syncEngine = new SyncEngine(
+      this.localStore,
+      remoteStore,
+      this.sharedClientState ,
+      initialUser,
+      maxConcurrentLimboResolutions
+    );
+    remoteStore.syncEngine = this.syncEngine;
     return Promise.resolve();
   }
 
@@ -536,15 +539,23 @@ export class MemoryPersistenceProvider implements PersistenceProvider {
   }
 
   getPersistence(): Persistence {
-    assert(!!this.clientId, 'initialize() not called');
-    return new MemoryPersistence(
-      this.clientId,
-      p => new MemoryEagerDelegate(p)
-    );
+    assert(!!this.persistence, 'initialize() not called');
+    return this.persistence;
   }
 
   getSharedClientState(): SharedClientState {
-    return new MemorySharedClientState();
+    assert(!!this.sharedClientState, 'initialize() not called');
+    return this.sharedClientState;
+  }
+
+  getLocalStore(): LocalStore {
+    assert(!!this.localStore, 'initialize() not called');
+    return this.localStore;
+  }
+
+  getSyncEngine(): SyncEngine {
+    assert(!!this.syncEngine, 'initialize() not called');
+    return this.syncEngine;
   }
 
   clearPersistence(): never {
@@ -552,30 +563,5 @@ export class MemoryPersistenceProvider implements PersistenceProvider {
       Code.FAILED_PRECONDITION,
       MEMORY_ONLY_PERSISTENCE_ERROR_MESSAGE
     );
-  }
-
-  newLocalStore(
-    persistence: Persistence,
-    queryEngine: QueryEngine,
-    initialUser: User
-  ): LocalStore {
-    return new LocalStore(persistence, queryEngine, initialUser);
-  }
-
-  newSyncEngine(
-    localStore: LocalStore,
-    remoteStore: RemoteStore,
-    sharedClientState: SharedClientState,
-    currentUser: User,
-    maxConcurrentLimboResolutions: number
-  ): Promise<SyncEngine> {
-    const syncEngine = new SyncEngine(
-      localStore,
-      remoteStore,
-      sharedClientState,
-      currentUser,
-      maxConcurrentLimboResolutions
-    );
-    return Promise.resolve(syncEngine);
   }
 }

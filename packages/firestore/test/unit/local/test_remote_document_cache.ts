@@ -29,6 +29,8 @@ import {
 } from '../../../src/model/collections';
 import { MaybeDocument } from '../../../src/model/document';
 import { DocumentKey } from '../../../src/model/document_key';
+import {assert} from "../../../src/util/assert";
+import {IndexedDbRemoteDocumentCache} from "../../../src/local/indexeddb_remote_document_cache";
 
 /**
  * A wrapper around a RemoteDocumentCache that automatically creates a
@@ -130,6 +132,7 @@ export class TestRemoteDocumentCache {
       'getNewDocumentChanges',
       'readonly',
       txn => {
+        assert(this.cache instanceof IndexedDbRemoteDocumentCache, "getNewDocumentChanges is only supported by IndexedDB")
         return this.cache.getNewDocumentChanges(txn, sinceReadTime);
       }
     );

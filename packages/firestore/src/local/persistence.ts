@@ -34,7 +34,6 @@ import { Platform } from '../platform/platform';
 import { AsyncQueue } from '../util/async_queue';
 import { SyncEngine } from '../core/sync_engine';
 import { RemoteStore } from '../remote/remote_store';
-import { QueryEngine } from './query_engine';
 
 export const PRIMARY_LEASE_LOST_ERROR_MSG =
   'The current tab is not in the required state to perform this operation. ' +
@@ -184,17 +183,6 @@ export interface Persistence {
   shutdown(): Promise<void>;
 
   /**
-   * Registers a listener that gets called when the primary state of the
-   * instance changes. Upon registering, this listener is invoked immediately
-   * with the current primary state.
-   *
-   * PORTING NOTE: This is only used for Web multi-tab.
-   */
-  setPrimaryStateListener(
-    primaryStateListener: PrimaryStateListener
-  ): Promise<void>;
-
-  /**
    * Registers a listener that gets called when the database receives a
    * version change event indicating that it has deleted.
    *
@@ -203,24 +191,7 @@ export interface Persistence {
   setDatabaseDeletedListener(
     databaseDeletedListener: () => Promise<void>
   ): void;
-
-  /**
-   * Adjusts the current network state in the client's metadata, potentially
-   * affecting the primary lease.
-   *
-   * PORTING NOTE: This is only used for Web multi-tab.
-   */
-  setNetworkEnabled(networkEnabled: boolean): void;
-
-  /**
-   * Returns the IDs of the clients that are currently active. If multi-tab
-   * is not supported, returns an array that only contains the local client's
-   * ID.
-   *
-   * PORTING NOTE: This is only used for Web multi-tab.
-   */
-  getActiveClients(): Promise<ClientId[]>;
-
+  
   /**
    * Returns a MutationQueue representing the persisted mutations for the
    * given user.
@@ -308,10 +279,12 @@ export interface GarbageCollectionScheduler {
 export interface PersistenceProvider {
   initialize(
     asyncQueue: AsyncQueue,
+    remoteStore: RemoteStore,
     databaseInfo: DatabaseInfo,
     platform: Platform,
     clientId: ClientId,
     initialUser: User,
+    maxConcurrentLimboResolutions: number,
     settings: PersistenceSettings
   ): Promise<void>;
 
@@ -320,20 +293,10 @@ export interface PersistenceProvider {
   getGarbageCollectionScheduler(): GarbageCollectionScheduler;
 
   getSharedClientState(): SharedClientState;
+  
+  getLocalStore(): LocalStore;
+  
+  getSyncEngine(): SyncEngine;
 
   clearPersistence(databaseId: DatabaseInfo): Promise<void>;
-
-  newLocalStore(
-    persistence: Persistence,
-    queryEngine: QueryEngine,
-    initialUser: User
-  ): LocalStore;
-
-  newSyncEngine(
-    localStore: LocalStore,
-    remoteStore: RemoteStore,
-    sharedClientState: SharedClientState,
-    currentUser: User,
-    maxConcurrentLimboResolutions: number
-  ): Promise<SyncEngine>;
 }

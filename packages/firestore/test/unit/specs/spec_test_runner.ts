@@ -15,18 +15,18 @@
  * limitations under the License.
  */
 
-import { expect } from 'chai';
-import { EmptyCredentialsProvider, Token } from '../../../src/api/credentials';
-import { User } from '../../../src/auth/user';
-import { DatabaseId, DatabaseInfo } from '../../../src/core/database_info';
+import {expect} from 'chai';
+import {EmptyCredentialsProvider, Token} from '../../../src/api/credentials';
+import {User} from '../../../src/auth/user';
+import {DatabaseId, DatabaseInfo} from '../../../src/core/database_info';
 import {
   EventManager,
   Observer,
   QueryListener
 } from '../../../src/core/event_manager';
-import { Query } from '../../../src/core/query';
-import { SnapshotVersion } from '../../../src/core/snapshot_version';
-import { MultiTabSyncEngine } from '../../../src/core/sync_engine';
+import {Query} from '../../../src/core/query';
+import {SnapshotVersion} from '../../../src/core/snapshot_version';
+import {MultiTabSyncEngine, SyncEngine} from '../../../src/core/sync_engine';
 import {
   OnlineState,
   OnlineStateSource,
@@ -37,44 +37,44 @@ import {
   DocumentViewChange,
   ViewSnapshot
 } from '../../../src/core/view_snapshot';
-import { IndexFreeQueryEngine } from '../../../src/local/index_free_query_engine';
-import { IndexedDbPersistence } from '../../../src/local/indexeddb_persistence';
+import {IndexFreeQueryEngine} from '../../../src/local/index_free_query_engine';
+import {IndexedDbPersistence} from '../../../src/local/indexeddb_persistence';
 import {
   DbPrimaryClient,
   DbPrimaryClientKey,
   SCHEMA_VERSION,
   SchemaConverter
 } from '../../../src/local/indexeddb_schema';
-import { MultiTabLocalStore } from '../../../src/local/local_store';
-import { LruParams } from '../../../src/local/lru_garbage_collector';
+import {LocalStore, MultiTabLocalStore} from '../../../src/local/local_store';
+import {LruParams} from '../../../src/local/lru_garbage_collector';
 import {
   MemoryEagerDelegate,
   MemoryLruDelegate,
   MemoryPersistence
 } from '../../../src/local/memory_persistence';
-import { Persistence } from '../../../src/local/persistence';
+import {Persistence} from '../../../src/local/persistence';
 import {
   ClientId,
   MemorySharedClientState,
   SharedClientState,
   WebStorageSharedClientState
 } from '../../../src/local/shared_client_state';
-import { SimpleDb } from '../../../src/local/simple_db';
-import { TargetData, TargetPurpose } from '../../../src/local/target_data';
-import { DocumentOptions } from '../../../src/model/document';
-import { DocumentKey } from '../../../src/model/document_key';
-import { JsonObject } from '../../../src/model/field_value';
-import { Mutation } from '../../../src/model/mutation';
-import { PlatformSupport } from '../../../src/platform/platform';
+import {SimpleDb} from '../../../src/local/simple_db';
+import {TargetData, TargetPurpose} from '../../../src/local/target_data';
+import {DocumentOptions} from '../../../src/model/document';
+import {DocumentKey} from '../../../src/model/document_key';
+import {JsonObject} from '../../../src/model/field_value';
+import {Mutation} from '../../../src/model/mutation';
+import {PlatformSupport} from '../../../src/platform/platform';
 import * as api from '../../../src/protos/firestore_proto_api';
-import { Connection, Stream } from '../../../src/remote/connection';
-import { Datastore } from '../../../src/remote/datastore';
-import { ExistenceFilter } from '../../../src/remote/existence_filter';
-import { WriteRequest } from '../../../src/remote/persistent_stream';
-import { RemoteStore } from '../../../src/remote/remote_store';
-import { mapCodeFromRpcCode } from '../../../src/remote/rpc_error';
-import { JsonProtoSerializer } from '../../../src/remote/serializer';
-import { StreamBridge } from '../../../src/remote/stream_bridge';
+import {Connection, Stream} from '../../../src/remote/connection';
+import {Datastore} from '../../../src/remote/datastore';
+import {ExistenceFilter} from '../../../src/remote/existence_filter';
+import {WriteRequest} from '../../../src/remote/persistent_stream';
+import {RemoteStore} from '../../../src/remote/remote_store';
+import {mapCodeFromRpcCode} from '../../../src/remote/rpc_error';
+import {JsonProtoSerializer} from '../../../src/remote/serializer';
+import {StreamBridge} from '../../../src/remote/stream_bridge';
 import {
   DocumentWatchChange,
   ExistenceFilterChange,
@@ -82,14 +82,15 @@ import {
   WatchTargetChange,
   WatchTargetChangeState
 } from '../../../src/remote/watch_change';
-import { assert, fail } from '../../../src/util/assert';
-import { AsyncQueue, TimerId } from '../../../src/util/async_queue';
-import { FirestoreError } from '../../../src/util/error';
-import { primitiveComparator } from '../../../src/util/misc';
-import { forEach, objectSize } from '../../../src/util/obj';
-import { ObjectMap } from '../../../src/util/obj_map';
-import { Deferred, sequence } from '../../../src/util/promise';
+import {assert, fail} from '../../../src/util/assert';
+import {AsyncQueue, TimerId} from '../../../src/util/async_queue';
+import {FirestoreError} from '../../../src/util/error';
+import {primitiveComparator} from '../../../src/util/misc';
+import {forEach, objectSize} from '../../../src/util/obj';
+import {ObjectMap} from '../../../src/util/obj_map';
+import {Deferred, sequence} from '../../../src/util/promise';
 import {
+  byteStringFromString,
   deletedDoc,
   deleteMutation,
   doc,
@@ -100,23 +101,22 @@ import {
   patchMutation,
   path,
   setMutation,
+  stringFromBase64String,
   TestSnapshotVersion,
-  version,
-  byteStringFromString,
-  stringFromBase64String
+  version
 } from '../../util/helpers';
-import { encodeWatchChange } from '../../util/spec_test_helpers';
-import { SharedFakeWebStorage, TestPlatform } from '../../util/test_platform';
+import {encodeWatchChange} from '../../util/spec_test_helpers';
+import {SharedFakeWebStorage, TestPlatform} from '../../util/test_platform';
 import {
   clearTestPersistence,
   INDEXEDDB_TEST_DATABASE_NAME,
   TEST_PERSISTENCE_PREFIX,
   TEST_SERIALIZER
 } from '../local/persistence_test_helpers';
-import { MULTI_CLIENT_TAG } from './describe_spec';
-import { ByteString } from '../../../src/util/byte_string';
-import { SortedSet } from '../../../src/util/sorted_set';
-import { ActiveTargetMap, ActiveTargetSpec } from './spec_builder';
+import {MULTI_CLIENT_TAG} from './describe_spec';
+import {ByteString} from '../../../src/util/byte_string';
+import {SortedSet} from '../../../src/util/sorted_set';
+import {ActiveTargetMap, ActiveTargetSpec} from './spec_builder';
 
 const ARBITRARY_SEQUENCE_NUMBER = 2;
 
@@ -399,7 +399,7 @@ abstract class TestRunner {
   // Initialized asynchronously via start().
   private connection!: MockConnection;
   private eventManager!: EventManager;
-  private syncEngine!: MultiTabSyncEngine;
+  private syncEngine!: SyncEngine;
 
   private eventList: QueryEvent[] = [];
   private acknowledgedDocs: string[];
@@ -419,7 +419,7 @@ abstract class TestRunner {
 
   // Initialized asynchronously via start().
   private datastore!: Datastore;
-  private localStore!: MultiTabLocalStore;
+  private localStore!: LocalStore;
   private remoteStore!: RemoteStore;
   private persistence!: Persistence;
   protected sharedClientState!: SharedClientState;
@@ -477,11 +477,10 @@ abstract class TestRunner {
     );
 
     const queryEngine = new IndexFreeQueryEngine();
-    this.localStore = new MultiTabLocalStore(
-      this.persistence,
+    this.localStore = await this.initLocalStore( this.persistence,
       queryEngine,
-      this.user
-    );
+      this.user);
+    
     await this.localStore.start();
 
     this.connection = new MockConnection(this.queue);
@@ -515,7 +514,9 @@ abstract class TestRunner {
       remoteStoreOnlineStateChangedHandler,
       connectivityMonitor
     );
-    this.syncEngine = new MultiTabSyncEngine(
+    
+    
+    this.syncEngine = this.initSyncEngine(
       this.localStore,
       this.remoteStore,
       this.sharedClientState,
@@ -547,8 +548,14 @@ abstract class TestRunner {
     serializer: JsonProtoSerializer,
     gcEnabled: boolean
   ): Promise<Persistence>;
+  
+  protected abstract initLocalStore(persistence: Persistence, queryEngine: IndexFreeQueryEngine, user: User) : Promise<LocalStore>;
 
+
+  protected abstract initSyncEngine(localStore: LocalStore, remoteStore: RemoteStore, sharedClientState: SharedClientState, user: User, maxConcurrentLimboResolutions: number) : SyncEngine;
+  
   protected abstract getSharedClientState(): SharedClientState;
+  
 
   get isPrimaryClient(): boolean {
     return this.syncEngine.isPrimaryClient;
@@ -1284,6 +1291,7 @@ abstract class TestRunner {
       )
     };
   }
+
 }
 
 class MemoryTestRunner extends TestRunner {
@@ -1296,13 +1304,22 @@ class MemoryTestRunner extends TestRunner {
     gcEnabled: boolean
   ): Promise<Persistence> {
     return Promise.resolve(
-      new MemoryPersistence(this.clientId, p =>
+      new MemoryPersistence(p =>
         gcEnabled
           ? new MemoryEagerDelegate(p)
           : new MemoryLruDelegate(p, LruParams.DEFAULT)
       )
     );
   }
+
+  protected async initLocalStore(persistence: Persistence, queryEngine: IndexFreeQueryEngine, user: User) : Promise<LocalStore> {
+    return new LocalStore(persistence, queryEngine, user);
+  }
+
+  protected  initSyncEngine(localStore: LocalStore, remoteStore: RemoteStore, sharedClientState: SharedClientState, user: User, maxConcurrentLimboResolutions: number) : SyncEngine {
+    return new SyncEngine(localStore,remoteStore, sharedClientState, user, maxConcurrentLimboResolutions);
+  }
+
 }
 
 /**
@@ -1336,6 +1353,18 @@ class IndexedDbTestRunner extends TestRunner {
       sequenceNumberSyncer: this.sharedClientState
     });
   }
+
+  protected async initLocalStore(persistence: Persistence, queryEngine: IndexFreeQueryEngine, user: User) : Promise<LocalStore> {
+    const localStore = new MultiTabLocalStore(persistence as IndexedDbPersistence, queryEngine, user);
+    localStore.start();
+    return localStore;
+  }
+
+  protected  initSyncEngine(localStore: LocalStore, remoteStore: RemoteStore, sharedClientState: SharedClientState, user: User, maxConcurrentLimboResolutions: number) : SyncEngine {
+    return new MultiTabSyncEngine(localStore as MultiTabLocalStore,remoteStore, sharedClientState, user, maxConcurrentLimboResolutions);
+  }
+
+
 
   static destroyPersistence(): Promise<void> {
     return SimpleDb.delete(INDEXEDDB_TEST_DATABASE_NAME);

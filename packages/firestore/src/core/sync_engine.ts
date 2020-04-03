@@ -875,18 +875,12 @@ export class SyncEngine implements RemoteSyncer {
 
     await this.remoteStore.handleCredentialChange();
   }
-
-  // PORTING NOTE: Multi-tab only. In other clients, LocalStore is unaware of
-  // the online state.
+  
   enableNetwork(): Promise<void> {
-    this.localStore.setNetworkEnabled(true);
     return this.remoteStore.enableNetwork();
   }
-
-  // PORTING NOTE: Multi-tab only. In other clients, LocalStore is unaware of
-  // the online state.
+  
   disableNetwork(): Promise<void> {
-    this.localStore.setNetworkEnabled(false);
     return this.remoteStore.disableNetwork();
   }
 
@@ -936,6 +930,21 @@ export class MultiTabSyncEngine extends SyncEngine
   // Only used for testing.
   get isPrimaryClient(): boolean {
     return this.isPrimary === true;
+  }
+
+  enableNetwork(): Promise<void> {
+    // PORTING NOTE: Multi-tab only. In other clients, LocalStore is unaware of
+    // the online state.
+    this.localStore.setNetworkEnabled(true);
+    return super.enableNetwork();
+  }
+
+  
+  disableNetwork(): Promise<void> {
+    // PORTING NOTE: Multi-tab only. In other clients, LocalStore is unaware of
+    // the online state.
+    this.localStore.setNetworkEnabled(false);
+    return super.disableNetwork();
   }
 
   /**

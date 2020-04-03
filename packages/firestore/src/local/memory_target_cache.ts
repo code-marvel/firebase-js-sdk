@@ -184,16 +184,7 @@ export class MemoryTargetCache implements TargetCache {
     const targetData = this.targets.get(target) || null;
     return PersistencePromise.resolve(targetData);
   }
-
-  getTargetDataForTarget(
-    transaction: PersistenceTransaction,
-    targetId: TargetId
-  ): never {
-    // This method is only needed for multi-tab and we can't implement it
-    // efficiently without additional data structures.
-    return fail('Not yet implemented.');
-  }
-
+  
   addMatchingKeys(
     txn: PersistenceTransaction,
     keys: DocumentKeySet,

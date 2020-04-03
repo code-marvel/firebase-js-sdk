@@ -176,24 +176,6 @@ export class MemoryRemoteDocumentCache implements RemoteDocumentCache {
     return PersistencePromise.forEach(this.docs, (key: DocumentKey) => f(key));
   }
 
-  getNewDocumentChanges(
-    transaction: PersistenceTransaction,
-    sinceReadTime: SnapshotVersion
-  ): PersistencePromise<{
-    changedDocs: MaybeDocumentMap;
-    readTime: SnapshotVersion;
-  }> {
-    throw new Error(
-      'getNewDocumentChanges() is not supported with MemoryPersistence'
-    );
-  }
-
-  getLastReadTime(
-    transaction: PersistenceTransaction
-  ): PersistencePromise<SnapshotVersion> {
-    return PersistencePromise.resolve(SnapshotVersion.MIN);
-  }
-
   newChangeBuffer(options?: {
     trackRemovals: boolean;
   }): RemoteDocumentChangeBuffer {

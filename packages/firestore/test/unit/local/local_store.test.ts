@@ -85,6 +85,11 @@ import { CountingQueryEngine } from './counting_query_engine';
 import * as persistenceHelpers from './persistence_test_helpers';
 import { ByteString } from '../../../src/util/byte_string';
 
+export interface LocalStoreComponents {
+queryEngine:CountingQueryEngine;
+persistence: Persistence; localStore: LocalStore;
+}
+
 class LocalStoreTester {
   private promiseChain: Promise<void> = Promise.resolve();
   private lastChanges: MaybeDocumentMap | null = null;
@@ -389,18 +394,42 @@ class LocalStoreTester {
 
 describe('LocalStore w/ Memory Persistence (SimpleQueryEngine)', () => {
   addEqualityMatcher();
-  genericLocalStoreTests(
-    persistenceHelpers.testMemoryEagerPersistence,
-    new SimpleQueryEngine(),
+  
+  async function initialize() : Promise<LocalStoreComponents> {
+    const queryEngine =  new CountingQueryEngine(new SimpleQueryEngine(), "simple");
+    const persistence = await persistenceHelpers.testMemoryEagerPersistence();
+    const localStore = new LocalStore(
+      persistence,
+      queryEngine,
+      User.UNAUTHENTICATED
+    );
+
+    return {queryEngine, persistence, localStore };
+  }
+  
+  genericLocalStoreTests(initialize,
     /* gcIsEager= */ true
   );
 });
 
 describe('LocalStore w/ Memory Persistence (IndexFreeQueryEngine)', () => {
+
+
+  async function initialize() : Promise<LocalStoreComponents> {
+    const queryEngine =  new CountingQueryEngine(new IndexFreeQueryEngine(), "index-free");
+    const persistence = await persistenceHelpers.testMemoryEagerPersistence();
+    const localStore = new LocalStore(
+      persistence,
+      queryEngine,
+      User.UNAUTHENTICATED
+    );
+
+    return {queryEngine, persistence, localStore };
+  }
+  
   addEqualityMatcher();
   genericLocalStoreTests(
-    persistenceHelpers.testMemoryEagerPersistence,
-    new IndexFreeQueryEngine(),
+  initialize,
     /* gcIsEager= */ true
   );
 });
@@ -413,10 +442,22 @@ describe('LocalStore w/ IndexedDB Persistence (SimpleQueryEngine)', () => {
     return;
   }
 
+  async function initialize() : Promise<LocalStoreComponents> {
+    const queryEngine =  new CountingQueryEngine(new SimpleQueryEngine(), 'simple');
+    const persistence = await persistenceHelpers.testIndexedDbPersistence();
+    const localStore = new MultiTabLocalStore(
+      persistence,
+      queryEngine,
+      User.UNAUTHENTICATED
+    );
+    await localStore.start();
+
+    return {queryEngine, persistence, localStore };
+  }
+  
   addEqualityMatcher();
   genericLocalStoreTests(
-    persistenceHelpers.testIndexedDbPersistence,
-    new SimpleQueryEngine(),
+   initialize,
     /* gcIsEager= */ false
   );
 });
@@ -429,32 +470,40 @@ describe('LocalStore w/ IndexedDB Persistence (IndexFreeQueryEngine)', () => {
     return;
   }
 
+  async function initialize() : Promise<LocalStoreComponents> {
+    const queryEngine =  new CountingQueryEngine(new IndexFreeQueryEngine(), "index-free");
+    const persistence = await persistenceHelpers.testIndexedDbPersistence();
+    const localStore = new MultiTabLocalStore(
+      persistence,
+      queryEngine,
+      User.UNAUTHENTICATED
+    );
+    await localStore.start();
+    
+    return {queryEngine, persistence, localStore };
+  }
+  
   addEqualityMatcher();
   genericLocalStoreTests(
-    persistenceHelpers.testIndexedDbPersistence,
-    new IndexFreeQueryEngine(),
+    initialize,
     /* gcIsEager= */ false
   );
 });
 
 function genericLocalStoreTests(
-  getPersistence: () => Promise<Persistence>,
-  queryEngine: QueryEngine,
+  getComponents: () => Promise<LocalStoreComponents>,
   gcIsEager: boolean
 ): void {
   let persistence: Persistence;
   let localStore: LocalStore;
+  let queryEngine: CountingQueryEngine;
   let countingQueryEngine: CountingQueryEngine;
 
   beforeEach(async () => {
-    persistence = await getPersistence();
-    countingQueryEngine = new CountingQueryEngine(queryEngine);
-    localStore = new MultiTabLocalStore(
-      persistence,
-      countingQueryEngine,
-      User.UNAUTHENTICATED
-    );
-    await localStore.start();
+    const components = await getComponents();
+    persistence = components.persistence;
+    localStore = components.localStore;
+    queryEngine = components.queryEngine;
   });
 
   afterEach(async () => {
@@ -1497,10 +1546,11 @@ function genericLocalStoreTests(
     );
   });
 
-  // eslint-disable-next-line no-restricted-properties
-  (queryEngine instanceof IndexFreeQueryEngine && !gcIsEager ? it : it.skip)(
-    'uses target mapping to execute queries',
-    () => {
+  it('uses target mapping to execute queries', () => {
+      if (queryEngine.type !== 'index-free' || gcIsEager) {
+        return;
+      }
+      
       // This test verifies that once a target mapping has been written, only
       // documents that match the query are read from the RemoteDocumentCache.
 
