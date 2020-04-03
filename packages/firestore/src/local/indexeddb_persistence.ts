@@ -68,7 +68,6 @@ import {
   LruParams,
   LruScheduler
 } from './lru_garbage_collector';
-import { MutationQueue } from './mutation_queue';
 import {
   GarbageCollectionScheduler,
   Persistence,
@@ -92,8 +91,9 @@ import { SimpleDb, SimpleDbStore, SimpleDbTransaction } from './simple_db';
 import { LocalStore, MultiTabLocalStore } from './local_store';
 import { RemoteStore } from '../remote/remote_store';
 import { MultiTabSyncEngine, SyncEngine } from '../core/sync_engine';
-import { QueryEngine } from './query_engine';
-import {IndexFreeQueryEngine} from "./index_free_query_engine";
+import { IndexFreeQueryEngine } from './index_free_query_engine';
+import { Datastore } from '../remote/datastore';
+import { ConnectivityMonitor } from '../remote/connectivity_monitor';
 
 const LOG_TAG = 'IndexedDbPersistence';
 
@@ -357,7 +357,7 @@ export class IndexedDbPersistence implements Persistence {
         return Promise.reject(reason);
       });
   }
-  
+
   /**
    * Registers a listener that gets called when the primary state of the
    * instance changes. Upon registering, this listener is invoked immediately
@@ -719,7 +719,7 @@ export class IndexedDbPersistence implements Persistence {
         !this.isClientZombied(client.clientId)
     );
   }
-  
+
   /**
    * Returns the IDs of the clients that are currently active. If multi-tab
    * is not supported, returns an array that only contains the local client's
@@ -1346,12 +1346,14 @@ export class IndexedDbPersistenceProvider implements PersistenceProvider {
   private localStore!: MultiTabLocalStore;
   private syncEngine!: MultiTabSyncEngine;
   private gcScheduler!: GarbageCollectionScheduler;
+  private remoteStore!: RemoteStore;
 
   async initialize(
     asyncQueue: AsyncQueue,
-    remoteStore: RemoteStore,
     databaseInfo: DatabaseInfo,
     platform: Platform,
+    datastore: Datastore,
+    connectivityMonitor: ConnectivityMonitor,
     clientId: ClientId,
     initialUser: User,
     maxConcurrentLimboResolutions: number,
@@ -1404,17 +1406,39 @@ export class IndexedDbPersistenceProvider implements PersistenceProvider {
       .garbageCollector;
     this.gcScheduler = new LruScheduler(garbageCollector, asyncQueue);
 
-
-    this.localStore = new MultiTabLocalStore(this.persistence, new IndexFreeQueryEngine(), initialUser);
+    this.localStore = new MultiTabLocalStore(
+      this.persistence,
+      new IndexFreeQueryEngine(),
+      initialUser
+    );
     await this.localStore.start();
+
+    const remoteStoreOnlineStateChangedHandler = (
+      onlineState: OnlineState
+    ): void =>
+      this.syncEngine.applyOnlineStateChange(
+        onlineState,
+        OnlineStateSource.RemoteStore
+      );
+
+    this.remoteStore = new RemoteStore(
+      this.localStore,
+      datastore,
+      asyncQueue,
+      remoteStoreOnlineStateChangedHandler,
+      connectivityMonitor
+    );
 
     this.syncEngine = new MultiTabSyncEngine(
       this.localStore,
-      remoteStore,
+      this.remoteStore,
       this.sharedClientState,
       initialUser,
       maxConcurrentLimboResolutions
     );
+
+    // Set up wiring between sync engine and other components
+    this.remoteStore.syncEngine = this.syncEngine;
 
     // NOTE: This will immediately call the listener, so we make sure to
     // set it after localStore / remoteStore are started.
@@ -1435,15 +1459,12 @@ export class IndexedDbPersistenceProvider implements PersistenceProvider {
         OnlineStateSource.SharedClientState
       );
 
-
     this.sharedClientState.syncEngine = this.syncEngine;
-this.sharedClientState.start();
+    await this.sharedClientState.start();
 
-    // Set up wiring between sync engine and other components
-    remoteStore.syncEngine = this.syncEngine;
-    
-   await  this.localStore.start();
+    await this.remoteStore.start();
 
+    await this.localStore.start();
   }
 
   getPersistence(): Persistence {
@@ -1455,7 +1476,7 @@ this.sharedClientState.start();
     assert(!!this.sharedClientState, 'initialize() not called');
     return this.sharedClientState;
   }
-  
+
   getGarbageCollectionScheduler(): GarbageCollectionScheduler {
     assert(!!this.gcScheduler, 'initialize() not called');
     return this.gcScheduler;
@@ -1464,6 +1485,11 @@ this.sharedClientState.start();
   getLocalStore(): LocalStore {
     assert(!!this.localStore, 'initialize() not called');
     return this.localStore;
+  }
+
+  getRemoteStore(): RemoteStore {
+    assert(!!this.remoteStore, 'initialize() not called');
+    return this.remoteStore;
   }
 
   getSyncEngine(): SyncEngine {

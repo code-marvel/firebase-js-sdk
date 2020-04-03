@@ -32,7 +32,11 @@ import {
 import { DatabaseInfo } from '../core/database_info';
 import { PersistenceSettings } from '../core/firestore_client';
 import { ListenSequence } from '../core/listen_sequence';
-import { ListenSequenceNumber } from '../core/types';
+import {
+  ListenSequenceNumber,
+  OnlineState,
+  OnlineStateSource
+} from '../core/types';
 import { estimateByteSize } from '../model/values';
 import { AsyncQueue } from '../util/async_queue';
 import { MemoryIndexManager } from './memory_index_manager';
@@ -46,7 +50,6 @@ import {
   PersistenceProvider,
   PersistenceTransaction,
   PersistenceTransactionMode,
-  PrimaryStateListener,
   ReferenceDelegate
 } from './persistence';
 import { PersistencePromise } from './persistence_promise';
@@ -61,7 +64,9 @@ import { TargetData } from './target_data';
 import { SyncEngine } from '../core/sync_engine';
 import { LocalStore } from './local_store';
 import { RemoteStore } from '../remote/remote_store';
-import {IndexFreeQueryEngine} from "./index_free_query_engine";
+import { IndexFreeQueryEngine } from './index_free_query_engine';
+import { Datastore } from '../remote/datastore';
+import { ConnectivityMonitor } from '../remote/connectivity_monitor';
 
 const LOG_TAG = 'MemoryPersistence';
 
@@ -126,7 +131,7 @@ export class MemoryPersistence implements Persistence {
   setDatabaseDeletedListener(): void {
     // No op.
   }
-  
+
   getIndexManager(): MemoryIndexManager {
     return this.indexManager;
   }
@@ -495,12 +500,14 @@ export class MemoryPersistenceProvider implements PersistenceProvider {
   private persistence!: MemoryPersistence;
   private syncEngine!: SyncEngine;
   private sharedClientState!: MemorySharedClientState;
+  private remoteStore!: RemoteStore;
 
-  initialize(
+  async initialize(
     asyncQueue: AsyncQueue,
-    remoteStore: RemoteStore,
     databaseInfo: DatabaseInfo,
     platform: Platform,
+    datastore: Datastore,
+    connectivityMonitor: ConnectivityMonitor,
     clientId: ClientId,
     initialUser: User,
     maxConcurrentLimboResolutions: number,
@@ -513,20 +520,37 @@ export class MemoryPersistenceProvider implements PersistenceProvider {
       );
     }
     this.clientId = clientId;
-    this.persistence = new MemoryPersistence(
-      p => new MemoryEagerDelegate(p)
-    );
+    this.persistence = new MemoryPersistence(p => new MemoryEagerDelegate(p));
     this.sharedClientState = new MemorySharedClientState();
-    this.localStore = new LocalStore(this.persistence, new IndexFreeQueryEngine(), initialUser);
+    this.localStore = new LocalStore(
+      this.persistence,
+      new IndexFreeQueryEngine(),
+      initialUser
+    );
+    const remoteStoreOnlineStateChangedHandler = (
+      onlineState: OnlineState
+    ): void =>
+      this.syncEngine.applyOnlineStateChange(
+        onlineState,
+        OnlineStateSource.RemoteStore
+      );
+    this.remoteStore = new RemoteStore(
+      this.localStore,
+      datastore,
+      asyncQueue,
+      remoteStoreOnlineStateChangedHandler,
+      connectivityMonitor
+    );
+
     this.syncEngine = new SyncEngine(
       this.localStore,
-      remoteStore,
-      this.sharedClientState ,
+      this.remoteStore,
+      this.sharedClientState,
       initialUser,
       maxConcurrentLimboResolutions
     );
-    remoteStore.syncEngine = this.syncEngine;
-    return Promise.resolve();
+    await this.remoteStore.start();
+    this.remoteStore.syncEngine = this.syncEngine;
   }
 
   getGarbageCollectionScheduler(): GarbageCollectionScheduler {
@@ -551,6 +575,11 @@ export class MemoryPersistenceProvider implements PersistenceProvider {
   getLocalStore(): LocalStore {
     assert(!!this.localStore, 'initialize() not called');
     return this.localStore;
+  }
+
+  getRemoteStore(): RemoteStore {
+    assert(!!this.remoteStore, 'initialize() not called');
+    return this.remoteStore;
   }
 
   getSyncEngine(): SyncEngine {

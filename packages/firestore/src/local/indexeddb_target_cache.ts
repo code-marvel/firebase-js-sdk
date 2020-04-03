@@ -370,7 +370,7 @@ export class IndexedDbTargetCache implements TargetCache {
       )
       .next(() => count > 0);
   }
-  
+
   /**
    * Looks up a TargetData entry by target ID.
    *

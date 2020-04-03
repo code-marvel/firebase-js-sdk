@@ -34,7 +34,6 @@ import {
 } from '../../../src/local/local_store';
 import { LocalViewChanges } from '../../../src/local/local_view_changes';
 import { Persistence } from '../../../src/local/persistence';
-import { QueryEngine } from '../../../src/local/query_engine';
 import { SimpleQueryEngine } from '../../../src/local/simple_query_engine';
 import {
   documentKeySet,
@@ -86,8 +85,9 @@ import * as persistenceHelpers from './persistence_test_helpers';
 import { ByteString } from '../../../src/util/byte_string';
 
 export interface LocalStoreComponents {
-queryEngine:CountingQueryEngine;
-persistence: Persistence; localStore: LocalStore;
+  queryEngine: CountingQueryEngine;
+  persistence: Persistence;
+  localStore: LocalStore;
 }
 
 class LocalStoreTester {
@@ -394,9 +394,12 @@ class LocalStoreTester {
 
 describe('LocalStore w/ Memory Persistence (SimpleQueryEngine)', () => {
   addEqualityMatcher();
-  
-  async function initialize() : Promise<LocalStoreComponents> {
-    const queryEngine =  new CountingQueryEngine(new SimpleQueryEngine(), "simple");
+
+  async function initialize(): Promise<LocalStoreComponents> {
+    const queryEngine = new CountingQueryEngine(
+      new SimpleQueryEngine(),
+      'simple'
+    );
     const persistence = await persistenceHelpers.testMemoryEagerPersistence();
     const localStore = new LocalStore(
       persistence,
@@ -404,19 +407,18 @@ describe('LocalStore w/ Memory Persistence (SimpleQueryEngine)', () => {
       User.UNAUTHENTICATED
     );
 
-    return {queryEngine, persistence, localStore };
+    return { queryEngine, persistence, localStore };
   }
-  
-  genericLocalStoreTests(initialize,
-    /* gcIsEager= */ true
-  );
+
+  genericLocalStoreTests(initialize, /* gcIsEager= */ true);
 });
 
 describe('LocalStore w/ Memory Persistence (IndexFreeQueryEngine)', () => {
-
-
-  async function initialize() : Promise<LocalStoreComponents> {
-    const queryEngine =  new CountingQueryEngine(new IndexFreeQueryEngine(), "index-free");
+  async function initialize(): Promise<LocalStoreComponents> {
+    const queryEngine = new CountingQueryEngine(
+      new IndexFreeQueryEngine(),
+      'index-free'
+    );
     const persistence = await persistenceHelpers.testMemoryEagerPersistence();
     const localStore = new LocalStore(
       persistence,
@@ -424,14 +426,11 @@ describe('LocalStore w/ Memory Persistence (IndexFreeQueryEngine)', () => {
       User.UNAUTHENTICATED
     );
 
-    return {queryEngine, persistence, localStore };
+    return { queryEngine, persistence, localStore };
   }
-  
+
   addEqualityMatcher();
-  genericLocalStoreTests(
-  initialize,
-    /* gcIsEager= */ true
-  );
+  genericLocalStoreTests(initialize, /* gcIsEager= */ true);
 });
 
 describe('LocalStore w/ IndexedDB Persistence (SimpleQueryEngine)', () => {
@@ -442,8 +441,11 @@ describe('LocalStore w/ IndexedDB Persistence (SimpleQueryEngine)', () => {
     return;
   }
 
-  async function initialize() : Promise<LocalStoreComponents> {
-    const queryEngine =  new CountingQueryEngine(new SimpleQueryEngine(), 'simple');
+  async function initialize(): Promise<LocalStoreComponents> {
+    const queryEngine = new CountingQueryEngine(
+      new SimpleQueryEngine(),
+      'simple'
+    );
     const persistence = await persistenceHelpers.testIndexedDbPersistence();
     const localStore = new MultiTabLocalStore(
       persistence,
@@ -452,14 +454,11 @@ describe('LocalStore w/ IndexedDB Persistence (SimpleQueryEngine)', () => {
     );
     await localStore.start();
 
-    return {queryEngine, persistence, localStore };
+    return { queryEngine, persistence, localStore };
   }
-  
+
   addEqualityMatcher();
-  genericLocalStoreTests(
-   initialize,
-    /* gcIsEager= */ false
-  );
+  genericLocalStoreTests(initialize, /* gcIsEager= */ false);
 });
 
 describe('LocalStore w/ IndexedDB Persistence (IndexFreeQueryEngine)', () => {
@@ -470,8 +469,11 @@ describe('LocalStore w/ IndexedDB Persistence (IndexFreeQueryEngine)', () => {
     return;
   }
 
-  async function initialize() : Promise<LocalStoreComponents> {
-    const queryEngine =  new CountingQueryEngine(new IndexFreeQueryEngine(), "index-free");
+  async function initialize(): Promise<LocalStoreComponents> {
+    const queryEngine = new CountingQueryEngine(
+      new IndexFreeQueryEngine(),
+      'index-free'
+    );
     const persistence = await persistenceHelpers.testIndexedDbPersistence();
     const localStore = new MultiTabLocalStore(
       persistence,
@@ -479,15 +481,12 @@ describe('LocalStore w/ IndexedDB Persistence (IndexFreeQueryEngine)', () => {
       User.UNAUTHENTICATED
     );
     await localStore.start();
-    
-    return {queryEngine, persistence, localStore };
+
+    return { queryEngine, persistence, localStore };
   }
-  
+
   addEqualityMatcher();
-  genericLocalStoreTests(
-    initialize,
-    /* gcIsEager= */ false
-  );
+  genericLocalStoreTests(initialize, /* gcIsEager= */ false);
 });
 
 function genericLocalStoreTests(
@@ -1547,59 +1546,58 @@ function genericLocalStoreTests(
   });
 
   it('uses target mapping to execute queries', () => {
-      if (queryEngine.type !== 'index-free' || gcIsEager) {
-        return;
-      }
-      
-      // This test verifies that once a target mapping has been written, only
-      // documents that match the query are read from the RemoteDocumentCache.
-
-      const query = Query.atPath(path('foo')).addFilter(
-        filter('matches', '==', true)
-      );
-      return (
-        expectLocalStore()
-          .afterAllocatingQuery(query)
-          .toReturnTargetId(2)
-          .after(setMutation('foo/a', { matches: true }))
-          .after(setMutation('foo/b', { matches: true }))
-          .after(setMutation('foo/ignored', { matches: false }))
-          .afterAcknowledgingMutation({ documentVersion: 10 })
-          .afterAcknowledgingMutation({ documentVersion: 10 })
-          .afterAcknowledgingMutation({ documentVersion: 10 })
-          .afterExecutingQuery(query)
-          // Execute the query, but note that we read all existing documents
-          // from the RemoteDocumentCache since we do not yet have target
-          // mapping.
-          .toHaveRead({ documentsByQuery: 2 })
-          .after(
-            docAddedRemoteEvent(
-              [
-                doc('foo/a', 10, { matches: true }),
-                doc('foo/b', 10, { matches: true })
-              ],
-              [2],
-              []
-            )
-          )
-          .after(
-            noChangeEvent(
-              /* targetId= */ 2,
-              /* snapshotVersion= */ 10,
-              /* resumeToken= */ byteStringFromString('foo')
-            )
-          )
-          .after(localViewChanges(2, /* fromCache= */ false, {}))
-          .afterExecutingQuery(query)
-          .toHaveRead({ documentsByKey: 2, documentsByQuery: 0 })
-          .toReturnChanged(
-            doc('foo/a', 10, { matches: true }),
-            doc('foo/b', 10, { matches: true })
-          )
-          .finish()
-      );
+    if (queryEngine.type !== 'index-free' || gcIsEager) {
+      return;
     }
-  );
+
+    // This test verifies that once a target mapping has been written, only
+    // documents that match the query are read from the RemoteDocumentCache.
+
+    const query = Query.atPath(path('foo')).addFilter(
+      filter('matches', '==', true)
+    );
+    return (
+      expectLocalStore()
+        .afterAllocatingQuery(query)
+        .toReturnTargetId(2)
+        .after(setMutation('foo/a', { matches: true }))
+        .after(setMutation('foo/b', { matches: true }))
+        .after(setMutation('foo/ignored', { matches: false }))
+        .afterAcknowledgingMutation({ documentVersion: 10 })
+        .afterAcknowledgingMutation({ documentVersion: 10 })
+        .afterAcknowledgingMutation({ documentVersion: 10 })
+        .afterExecutingQuery(query)
+        // Execute the query, but note that we read all existing documents
+        // from the RemoteDocumentCache since we do not yet have target
+        // mapping.
+        .toHaveRead({ documentsByQuery: 2 })
+        .after(
+          docAddedRemoteEvent(
+            [
+              doc('foo/a', 10, { matches: true }),
+              doc('foo/b', 10, { matches: true })
+            ],
+            [2],
+            []
+          )
+        )
+        .after(
+          noChangeEvent(
+            /* targetId= */ 2,
+            /* snapshotVersion= */ 10,
+            /* resumeToken= */ byteStringFromString('foo')
+          )
+        )
+        .after(localViewChanges(2, /* fromCache= */ false, {}))
+        .afterExecutingQuery(query)
+        .toHaveRead({ documentsByKey: 2, documentsByQuery: 0 })
+        .toReturnChanged(
+          doc('foo/a', 10, { matches: true }),
+          doc('foo/b', 10, { matches: true })
+        )
+        .finish()
+    );
+  });
 
   it('last limbo free snapshot is advanced during view processing', async () => {
     // This test verifies that the `lastLimboFreeSnapshot` version for TargetData

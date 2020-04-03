@@ -19,7 +19,6 @@ import { Query } from '../core/query';
 import {
   DocumentKeySet,
   DocumentMap,
-  MaybeDocumentMap,
   NullableMaybeDocumentMap
 } from '../model/collections';
 import { MaybeDocument } from '../model/document';
@@ -81,7 +80,7 @@ export interface RemoteDocumentCache {
     query: Query,
     sinceReadTime: SnapshotVersion
   ): PersistencePromise<DocumentMap>;
-  
+
   /**
    * Provides access to add or update the contents of the cache. The buffer
    * handles proper size accounting for the change.

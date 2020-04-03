@@ -15,21 +15,19 @@
  * limitations under the License.
  */
 
-import {expect} from 'chai';
-import {EmptyCredentialsProvider, Token} from '../../../src/api/credentials';
-import {User} from '../../../src/auth/user';
-import {DatabaseId, DatabaseInfo} from '../../../src/core/database_info';
+import { expect } from 'chai';
+import { EmptyCredentialsProvider, Token } from '../../../src/api/credentials';
+import { User } from '../../../src/auth/user';
+import { DatabaseId, DatabaseInfo } from '../../../src/core/database_info';
 import {
   EventManager,
   Observer,
   QueryListener
 } from '../../../src/core/event_manager';
-import {Query} from '../../../src/core/query';
-import {SnapshotVersion} from '../../../src/core/snapshot_version';
-import {MultiTabSyncEngine, SyncEngine} from '../../../src/core/sync_engine';
+import { Query } from '../../../src/core/query';
+import { SnapshotVersion } from '../../../src/core/snapshot_version';
+import { SyncEngine } from '../../../src/core/sync_engine';
 import {
-  OnlineState,
-  OnlineStateSource,
   TargetId
 } from '../../../src/core/types';
 import {
@@ -37,44 +35,44 @@ import {
   DocumentViewChange,
   ViewSnapshot
 } from '../../../src/core/view_snapshot';
-import {IndexFreeQueryEngine} from '../../../src/local/index_free_query_engine';
-import {IndexedDbPersistence} from '../../../src/local/indexeddb_persistence';
+import {
+  IndexedDbPersistence,
+  IndexedDbPersistenceProvider
+} from '../../../src/local/indexeddb_persistence';
 import {
   DbPrimaryClient,
   DbPrimaryClientKey,
   SCHEMA_VERSION,
   SchemaConverter
 } from '../../../src/local/indexeddb_schema';
-import {LocalStore, MultiTabLocalStore} from '../../../src/local/local_store';
-import {LruParams} from '../../../src/local/lru_garbage_collector';
+import { LocalStore } from '../../../src/local/local_store';
 import {
-  MemoryEagerDelegate,
-  MemoryLruDelegate,
-  MemoryPersistence
+  MemoryPersistenceProvider
 } from '../../../src/local/memory_persistence';
-import {Persistence} from '../../../src/local/persistence';
+import {
+  Persistence,
+  PersistenceProvider
+} from '../../../src/local/persistence';
 import {
   ClientId,
-  MemorySharedClientState,
   SharedClientState,
-  WebStorageSharedClientState
 } from '../../../src/local/shared_client_state';
-import {SimpleDb} from '../../../src/local/simple_db';
-import {TargetData, TargetPurpose} from '../../../src/local/target_data';
-import {DocumentOptions} from '../../../src/model/document';
-import {DocumentKey} from '../../../src/model/document_key';
-import {JsonObject} from '../../../src/model/field_value';
-import {Mutation} from '../../../src/model/mutation';
-import {PlatformSupport} from '../../../src/platform/platform';
+import { SimpleDb } from '../../../src/local/simple_db';
+import { TargetData, TargetPurpose } from '../../../src/local/target_data';
+import { DocumentOptions } from '../../../src/model/document';
+import { DocumentKey } from '../../../src/model/document_key';
+import { JsonObject } from '../../../src/model/field_value';
+import { Mutation } from '../../../src/model/mutation';
+import { Platform, PlatformSupport } from '../../../src/platform/platform';
 import * as api from '../../../src/protos/firestore_proto_api';
-import {Connection, Stream} from '../../../src/remote/connection';
-import {Datastore} from '../../../src/remote/datastore';
-import {ExistenceFilter} from '../../../src/remote/existence_filter';
-import {WriteRequest} from '../../../src/remote/persistent_stream';
-import {RemoteStore} from '../../../src/remote/remote_store';
-import {mapCodeFromRpcCode} from '../../../src/remote/rpc_error';
-import {JsonProtoSerializer} from '../../../src/remote/serializer';
-import {StreamBridge} from '../../../src/remote/stream_bridge';
+import { Connection, Stream } from '../../../src/remote/connection';
+import { Datastore } from '../../../src/remote/datastore';
+import { ExistenceFilter } from '../../../src/remote/existence_filter';
+import { WriteRequest } from '../../../src/remote/persistent_stream';
+import { RemoteStore } from '../../../src/remote/remote_store';
+import { mapCodeFromRpcCode } from '../../../src/remote/rpc_error';
+import { JsonProtoSerializer } from '../../../src/remote/serializer';
+import { StreamBridge } from '../../../src/remote/stream_bridge';
 import {
   DocumentWatchChange,
   ExistenceFilterChange,
@@ -82,13 +80,13 @@ import {
   WatchTargetChange,
   WatchTargetChangeState
 } from '../../../src/remote/watch_change';
-import {assert, fail} from '../../../src/util/assert';
-import {AsyncQueue, TimerId} from '../../../src/util/async_queue';
-import {FirestoreError} from '../../../src/util/error';
-import {primitiveComparator} from '../../../src/util/misc';
-import {forEach, objectSize} from '../../../src/util/obj';
-import {ObjectMap} from '../../../src/util/obj_map';
-import {Deferred, sequence} from '../../../src/util/promise';
+import { assert, fail } from '../../../src/util/assert';
+import { AsyncQueue, TimerId } from '../../../src/util/async_queue';
+import { FirestoreError } from '../../../src/util/error';
+import { primitiveComparator } from '../../../src/util/misc';
+import { forEach, objectSize } from '../../../src/util/obj';
+import { ObjectMap } from '../../../src/util/obj_map';
+import { Deferred, sequence } from '../../../src/util/promise';
 import {
   byteStringFromString,
   deletedDoc,
@@ -105,18 +103,19 @@ import {
   TestSnapshotVersion,
   version
 } from '../../util/helpers';
-import {encodeWatchChange} from '../../util/spec_test_helpers';
-import {SharedFakeWebStorage, TestPlatform} from '../../util/test_platform';
+import { encodeWatchChange } from '../../util/spec_test_helpers';
+import { SharedFakeWebStorage, TestPlatform } from '../../util/test_platform';
 import {
   clearTestPersistence,
   INDEXEDDB_TEST_DATABASE_NAME,
-  TEST_PERSISTENCE_PREFIX,
   TEST_SERIALIZER
 } from '../local/persistence_test_helpers';
-import {MULTI_CLIENT_TAG} from './describe_spec';
-import {ByteString} from '../../../src/util/byte_string';
-import {SortedSet} from '../../../src/util/sorted_set';
-import {ActiveTargetMap, ActiveTargetSpec} from './spec_builder';
+import { MULTI_CLIENT_TAG } from './describe_spec';
+import { ByteString } from '../../../src/util/byte_string';
+import { SortedSet } from '../../../src/util/sorted_set';
+import { ActiveTargetMap, ActiveTargetSpec } from './spec_builder';
+import { PersistenceSettings } from '../../../src/core/firestore_client';
+import { ConnectivityMonitor } from '../../../src/remote/connectivity_monitor';
 
 const ARBITRARY_SEQUENCE_NUMBER = 2;
 
@@ -470,72 +469,37 @@ abstract class TestRunner {
   }
 
   async start(): Promise<void> {
-    this.sharedClientState = this.getSharedClientState();
-    this.persistence = await this.initPersistence(
-      this.serializer,
-      this.useGarbageCollection
-    );
-
-    const queryEngine = new IndexFreeQueryEngine();
-    this.localStore = await this.initLocalStore( this.persistence,
-      queryEngine,
-      this.user);
-    
-    await this.localStore.start();
-
-    this.connection = new MockConnection(this.queue);
     this.datastore = new Datastore(
       this.queue,
       this.connection,
       new EmptyCredentialsProvider(),
       this.serializer
     );
-    const remoteStoreOnlineStateChangedHandler = (
-      onlineState: OnlineState
-    ): void => {
-      this.syncEngine.applyOnlineStateChange(
-        onlineState,
-        OnlineStateSource.RemoteStore
-      );
-    };
-    const sharedClientStateOnlineStateChangedHandler = (
-      onlineState: OnlineState
-    ): void => {
-      this.syncEngine.applyOnlineStateChange(
-        onlineState,
-        OnlineStateSource.SharedClientState
-      );
-    };
     const connectivityMonitor = this.platform.newConnectivityMonitor();
-    this.remoteStore = new RemoteStore(
-      this.localStore,
-      this.datastore,
+    const persistenceProvider = await this.initPersistenceProvider(
       this.queue,
-      remoteStoreOnlineStateChangedHandler,
-      connectivityMonitor
-    );
-    
-    
-    this.syncEngine = this.initSyncEngine(
-      this.localStore,
-      this.remoteStore,
-      this.sharedClientState,
+      this.databaseInfo,
+      this.platform,
+      this.datastore,
+      connectivityMonitor,
+      this.clientId,
       this.user,
-      this.maxConcurrentLimboResolutions ?? Number.MAX_SAFE_INTEGER
+      this.maxConcurrentLimboResolutions || 100,
+      { durable: false } // TODO(mrschmidt): fix
     );
+
+    this.sharedClientState = persistenceProvider.getSharedClientState();
+    // TODO(mrschmidt): Somehow pass in useGarbageCollection
+    this.persistence = persistenceProvider.getPersistence();
+    this.localStore = persistenceProvider.getLocalStore();
+
+    this.connection = new MockConnection(this.queue);
+
+    this.remoteStore = persistenceProvider.getRemoteStore();
+    this.syncEngine = persistenceProvider.getSyncEngine();
 
     // Set up wiring between sync engine and other components
-    this.remoteStore.syncEngine = this.syncEngine;
-    this.sharedClientState.syncEngine = this.syncEngine;
-    this.sharedClientState.onlineStateHandler = sharedClientStateOnlineStateChangedHandler;
     this.eventManager = new EventManager(this.syncEngine);
-
-    await this.sharedClientState.start();
-    await this.remoteStore.start();
-
-    await this.persistence.setPrimaryStateListener(isPrimary =>
-      this.syncEngine.applyPrimaryState(isPrimary)
-    );
 
     await this.persistence.setDatabaseDeletedListener(async () => {
       await this.shutdown();
@@ -544,18 +508,17 @@ abstract class TestRunner {
     this.started = true;
   }
 
-  protected abstract initPersistence(
-    serializer: JsonProtoSerializer,
-    gcEnabled: boolean
-  ): Promise<Persistence>;
-  
-  protected abstract initLocalStore(persistence: Persistence, queryEngine: IndexFreeQueryEngine, user: User) : Promise<LocalStore>;
-
-
-  protected abstract initSyncEngine(localStore: LocalStore, remoteStore: RemoteStore, sharedClientState: SharedClientState, user: User, maxConcurrentLimboResolutions: number) : SyncEngine;
-  
-  protected abstract getSharedClientState(): SharedClientState;
-  
+  protected abstract initPersistenceProvider(
+    asyncQueue: AsyncQueue,
+    databaseInfo: DatabaseInfo,
+    platform: Platform,
+    datastore: Datastore,
+    connectivityMonitor: ConnectivityMonitor,
+    clientId: ClientId,
+    initialUser: User,
+    maxConcurrentLimboResolutions: number,
+    settings: PersistenceSettings
+  ): Promise<PersistenceProvider>;
 
   get isPrimaryClient(): boolean {
     return this.syncEngine.isPrimaryClient;
@@ -1042,6 +1005,10 @@ abstract class TestRunner {
         );
       }
       if ('numActiveClients' in expectedState) {
+        assert(
+          this.persistence instanceof IndexedDbPersistence,
+          'numActiveClients is only supported for persistence-enabled tests'
+        );
         const activeClients = await this.persistence.getActiveClients();
         expect(activeClients.length).to.equal(expectedState.numActiveClients);
       }
@@ -1291,35 +1258,34 @@ abstract class TestRunner {
       )
     };
   }
-
 }
 
 class MemoryTestRunner extends TestRunner {
-  protected getSharedClientState(): SharedClientState {
-    return new MemorySharedClientState();
-  }
-
-  protected initPersistence(
-    serializer: JsonProtoSerializer,
-    gcEnabled: boolean
-  ): Promise<Persistence> {
-    return Promise.resolve(
-      new MemoryPersistence(p =>
-        gcEnabled
-          ? new MemoryEagerDelegate(p)
-          : new MemoryLruDelegate(p, LruParams.DEFAULT)
-      )
+  protected async initPersistenceProvider(
+    asyncQueue: AsyncQueue,
+    databaseInfo: DatabaseInfo,
+    platform: Platform,
+    datastore: Datastore,
+    connectivityMonitor: ConnectivityMonitor,
+    clientId: ClientId,
+    initialUser: User,
+    maxConcurrentLimboResolutions: number,
+    settings: PersistenceSettings
+  ): Promise<PersistenceProvider> {
+    const persistenceProvider = new MemoryPersistenceProvider();
+    await persistenceProvider.initialize(
+      asyncQueue,
+      databaseInfo,
+      platform,
+      datastore,
+      connectivityMonitor,
+      clientId,
+      initialUser,
+      maxConcurrentLimboResolutions,
+      settings
     );
+    return persistenceProvider;
   }
-
-  protected async initLocalStore(persistence: Persistence, queryEngine: IndexFreeQueryEngine, user: User) : Promise<LocalStore> {
-    return new LocalStore(persistence, queryEngine, user);
-  }
-
-  protected  initSyncEngine(localStore: LocalStore, remoteStore: RemoteStore, sharedClientState: SharedClientState, user: User, maxConcurrentLimboResolutions: number) : SyncEngine {
-    return new SyncEngine(localStore,remoteStore, sharedClientState, user, maxConcurrentLimboResolutions);
-  }
-
 }
 
 /**
@@ -1327,44 +1293,31 @@ class MemoryTestRunner extends TestRunner {
  * enabled for the platform.
  */
 class IndexedDbTestRunner extends TestRunner {
-  protected getSharedClientState(): SharedClientState {
-    return new WebStorageSharedClientState(
-      this.queue,
-      this.platform,
-      TEST_PERSISTENCE_PREFIX,
-      this.clientId,
-      this.user
+  protected async initPersistenceProvider(
+    asyncQueue: AsyncQueue,
+    databaseInfo: DatabaseInfo,
+    platform: Platform,
+    datastore: Datastore,
+    connectivityMonitor: ConnectivityMonitor,
+    clientId: ClientId,
+    initialUser: User,
+    maxConcurrentLimboResolutions: number,
+    settings: PersistenceSettings
+  ): Promise<PersistenceProvider> {
+    const persistenceProvider = new IndexedDbPersistenceProvider();
+    await persistenceProvider.initialize(
+      asyncQueue,
+      databaseInfo,
+      platform,
+      datastore,
+      connectivityMonitor,
+      clientId,
+      initialUser,
+      maxConcurrentLimboResolutions,
+      settings
     );
+    return persistenceProvider;
   }
-
-  protected initPersistence(
-    serializer: JsonProtoSerializer,
-    gcEnabled: boolean
-  ): Promise<Persistence> {
-    // TODO(gsoltis): can we or should we disable this test if gc is enabled?
-    return IndexedDbPersistence.createIndexedDbPersistence({
-      allowTabSynchronization: true,
-      persistenceKey: TEST_PERSISTENCE_PREFIX,
-      clientId: this.clientId,
-      platform: this.platform,
-      queue: this.queue,
-      serializer,
-      lruParams: LruParams.DEFAULT,
-      sequenceNumberSyncer: this.sharedClientState
-    });
-  }
-
-  protected async initLocalStore(persistence: Persistence, queryEngine: IndexFreeQueryEngine, user: User) : Promise<LocalStore> {
-    const localStore = new MultiTabLocalStore(persistence as IndexedDbPersistence, queryEngine, user);
-    localStore.start();
-    return localStore;
-  }
-
-  protected  initSyncEngine(localStore: LocalStore, remoteStore: RemoteStore, sharedClientState: SharedClientState, user: User, maxConcurrentLimboResolutions: number) : SyncEngine {
-    return new MultiTabSyncEngine(localStore as MultiTabLocalStore,remoteStore, sharedClientState, user, maxConcurrentLimboResolutions);
-  }
-
-
 
   static destroyPersistence(): Promise<void> {
     return SimpleDb.delete(INDEXEDDB_TEST_DATABASE_NAME);

@@ -62,10 +62,10 @@ import { RemoteDocumentChangeBuffer } from './remote_document_change_buffer';
 import { ClientId } from './shared_client_state';
 import { TargetData, TargetPurpose } from './target_data';
 import { ByteString } from '../util/byte_string';
-import {IndexedDbPersistence} from "./indexeddb_persistence";
-import {IndexedDbMutationQueue} from "./indexeddb_mutation_queue";
-import {IndexedDbRemoteDocumentCache} from "./indexeddb_remote_document_cache";
-import {IndexedDbTargetCache} from "./indexeddb_target_cache";
+import { IndexedDbPersistence } from './indexeddb_persistence';
+import { IndexedDbMutationQueue } from './indexeddb_mutation_queue';
+import { IndexedDbRemoteDocumentCache } from './indexeddb_remote_document_cache';
+import { IndexedDbTargetCache } from './indexeddb_target_cache';
 
 const LOG_TAG = 'LocalStore';
 
@@ -218,7 +218,7 @@ export class LocalStore {
     );
     this.queryEngine.setLocalDocumentsView(this.localDocuments);
   }
-  
+
   /**
    * Tells the LocalStore that the currently authenticated user has changed.
    *
@@ -1009,7 +1009,7 @@ export class MultiTabLocalStore extends LocalStore {
   protected mutationQueue: IndexedDbMutationQueue;
   protected remoteDocuments: IndexedDbRemoteDocumentCache;
   protected targetCache: IndexedDbTargetCache;
-  
+
   constructor(
     protected persistence: IndexedDbPersistence,
     queryEngine: QueryEngine,
@@ -1021,7 +1021,7 @@ export class MultiTabLocalStore extends LocalStore {
     this.remoteDocuments = persistence.getRemoteDocumentCache();
     this.targetCache = persistence.getTargetCache();
   }
-  
+
   /** Starts the LocalStore. */
   start(): Promise<void> {
     return this.synchronizeLastDocumentChangeReadTime();
@@ -1048,7 +1048,7 @@ export class MultiTabLocalStore extends LocalStore {
       }
     );
   }
-  
+
   removeCachedMutationBatchMetadata(batchId: BatchId): void {
     this.mutationQueue.removeCachedMutationKeys(batchId);
   }

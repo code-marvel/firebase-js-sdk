@@ -48,8 +48,8 @@ import { AutoId } from '../util/misc';
 import { DatabaseId, DatabaseInfo } from './database_info';
 import { Query } from './query';
 import { Transaction } from './transaction';
-import { OnlineState, OnlineStateSource } from './types';
 import { ViewSnapshot } from './view_snapshot';
+import { ConnectivityMonitor } from '../remote/connectivity_monitor';
 
 const LOG_TAG = 'FirestoreClient';
 const MAX_CONCURRENT_LIMBO_RESOLUTIONS = 100;
@@ -171,14 +171,32 @@ export class FirestoreClient {
     this.credentials.setChangeListener(user => {
       if (!initialized) {
         initialized = true;
-        
+
         logDebug(LOG_TAG, 'Initializing. user=', user.uid);
-        this.initializePersistence(
-          persistenceProvider,
-          persistenceSettings,
-          user,
-          persistenceResult
-        )
+
+        this.platform
+          .loadConnection(this.databaseInfo)
+          .then(connection => {
+            const connectivityMonitor = this.platform.newConnectivityMonitor();
+            const serializer = this.platform.newSerializer(
+              this.databaseInfo.databaseId
+            );
+            const datastore = new Datastore(
+              this.asyncQueue,
+              connection,
+              this.credentials,
+              serializer
+            );
+
+            return this.initializePersistence(
+              datastore,
+              connectivityMonitor,
+              persistenceProvider,
+              persistenceSettings,
+              user,
+              persistenceResult
+            );
+          })
           .then(() => this.initializeRest(persistenceProvider))
           .then(initializationDone.resolve, initializationDone.reject);
       } else {
@@ -228,6 +246,8 @@ export class FirestoreClient {
    *     succeeded.
    */
   private async initializePersistence(
+    datastore: Datastore,
+    connectivityMonitor: ConnectivityMonitor,
     persistenceProvider: PersistenceProvider,
     persistenceSettings: PersistenceSettings,
     user: User,
@@ -236,9 +256,10 @@ export class FirestoreClient {
     try {
       await persistenceProvider.initialize(
         this.asyncQueue,
-        this.remoteStore,
         this.databaseInfo,
         this.platform,
+        datastore,
+        connectivityMonitor,
         this.clientId,
         user,
         MAX_CONCURRENT_LIMBO_RESOLUTIONS,
@@ -263,6 +284,8 @@ export class FirestoreClient {
           error
       );
       return this.initializePersistence(
+        datastore,
+        connectivityMonitor,
         new MemoryPersistenceProvider(),
         { durable: false },
         user,
@@ -332,40 +355,9 @@ export class FirestoreClient {
       .loadConnection(this.databaseInfo)
       .then(async connection => {
         this.localStore = persistenceProvider.getLocalStore();
-        const connectivityMonitor = this.platform.newConnectivityMonitor();
-        const serializer = this.platform.newSerializer(
-          this.databaseInfo.databaseId
-        );
-        const datastore = new Datastore(
-          this.asyncQueue,
-          connection,
-          this.credentials,
-          serializer
-        );
-
-        const remoteStoreOnlineStateChangedHandler = (
-          onlineState: OnlineState
-        ): void =>
-          this.syncEngine.applyOnlineStateChange(
-            onlineState,
-            OnlineStateSource.RemoteStore
-          );
-
-        this.remoteStore = new RemoteStore(
-          this.localStore,
-          datastore,
-          this.asyncQueue,
-          remoteStoreOnlineStateChangedHandler,
-          connectivityMonitor
-        );
-
-        this.syncEngine = await persistenceProvider.getSyncEngine();
-
+        this.remoteStore = persistenceProvider.getRemoteStore();
+        this.syncEngine = persistenceProvider.getSyncEngine();
         this.eventMgr = new EventManager(this.syncEngine);
-
-        // PORTING NOTE: LocalStore doesn't need an explicit start() on the Web.
-        await this.sharedClientState.start();
-        await this.remoteStore.start();
 
         // When a user calls clearPersistence() in one client, all other clients
         // need to be terminated to allow the delete to succeed.

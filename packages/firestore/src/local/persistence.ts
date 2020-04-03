@@ -34,6 +34,8 @@ import { Platform } from '../platform/platform';
 import { AsyncQueue } from '../util/async_queue';
 import { SyncEngine } from '../core/sync_engine';
 import { RemoteStore } from '../remote/remote_store';
+import { Datastore } from '../remote/datastore';
+import { ConnectivityMonitor } from '../remote/connectivity_monitor';
 
 export const PRIMARY_LEASE_LOST_ERROR_MSG =
   'The current tab is not in the required state to perform this operation. ' +
@@ -191,7 +193,7 @@ export interface Persistence {
   setDatabaseDeletedListener(
     databaseDeletedListener: () => Promise<void>
   ): void;
-  
+
   /**
    * Returns a MutationQueue representing the persisted mutations for the
    * given user.
@@ -279,9 +281,10 @@ export interface GarbageCollectionScheduler {
 export interface PersistenceProvider {
   initialize(
     asyncQueue: AsyncQueue,
-    remoteStore: RemoteStore,
     databaseInfo: DatabaseInfo,
     platform: Platform,
+    datastore: Datastore,
+    connectivityMonitor: ConnectivityMonitor,
     clientId: ClientId,
     initialUser: User,
     maxConcurrentLimboResolutions: number,
@@ -293,9 +296,11 @@ export interface PersistenceProvider {
   getGarbageCollectionScheduler(): GarbageCollectionScheduler;
 
   getSharedClientState(): SharedClientState;
-  
+
   getLocalStore(): LocalStore;
-  
+
+  getRemoteStore(): RemoteStore;
+
   getSyncEngine(): SyncEngine;
 
   clearPersistence(databaseId: DatabaseInfo): Promise<void>;

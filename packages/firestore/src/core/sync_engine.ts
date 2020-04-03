@@ -875,11 +875,11 @@ export class SyncEngine implements RemoteSyncer {
 
     await this.remoteStore.handleCredentialChange();
   }
-  
+
   enableNetwork(): Promise<void> {
     return this.remoteStore.enableNetwork();
   }
-  
+
   disableNetwork(): Promise<void> {
     return this.remoteStore.disableNetwork();
   }
@@ -939,7 +939,6 @@ export class MultiTabSyncEngine extends SyncEngine
     return super.enableNetwork();
   }
 
-  
   disableNetwork(): Promise<void> {
     // PORTING NOTE: Multi-tab only. In other clients, LocalStore is unaware of
     // the online state.

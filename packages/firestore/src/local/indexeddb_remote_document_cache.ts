@@ -290,7 +290,7 @@ export class IndexedDbRemoteDocumentCache implements RemoteDocumentCache {
       })
       .next(() => results);
   }
-  
+
   /**
    * Returns the set of documents that have changed since the specified read
    * time.
@@ -327,7 +327,7 @@ export class IndexedDbRemoteDocumentCache implements RemoteDocumentCache {
         };
       });
   }
-  
+
   /**
    * Returns the read time of the most recently read document in the cache, or
    * SnapshotVersion.MIN if not available.

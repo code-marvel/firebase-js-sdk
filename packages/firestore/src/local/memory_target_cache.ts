@@ -20,7 +20,7 @@ import { TargetIdGenerator } from '../core/target_id_generator';
 import { ListenSequenceNumber, TargetId } from '../core/types';
 import { DocumentKeySet } from '../model/collections';
 import { DocumentKey } from '../model/document_key';
-import { assert, fail } from '../util/assert';
+import { assert } from '../util/assert';
 import { ObjectMap } from '../util/obj_map';
 
 import { ActiveTargets } from './lru_garbage_collector';
@@ -184,7 +184,7 @@ export class MemoryTargetCache implements TargetCache {
     const targetData = this.targets.get(target) || null;
     return PersistencePromise.resolve(targetData);
   }
-  
+
   addMatchingKeys(
     txn: PersistenceTransaction,
     keys: DocumentKeySet,

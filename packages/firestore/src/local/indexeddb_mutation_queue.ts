@@ -230,7 +230,7 @@ export class IndexedDbMutationQueue implements MutationQueue {
         return null;
       });
   }
-  
+
   /**
    * Returns the document keys for the mutation batch with the given batchId.
    * For primary clients, this method returns `null` after

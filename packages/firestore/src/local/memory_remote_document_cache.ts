@@ -21,7 +21,6 @@ import {
   DocumentMap,
   documentMap,
   DocumentSizeEntry,
-  MaybeDocumentMap,
   NullableMaybeDocumentMap,
   nullableMaybeDocumentMap
 } from '../model/collections';

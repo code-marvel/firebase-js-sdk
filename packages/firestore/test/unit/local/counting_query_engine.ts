@@ -30,7 +30,6 @@ import { DocumentKeySet, DocumentMap } from '../../../src/model/collections';
  * of documents and mutations read.
  */
 export class CountingQueryEngine implements QueryEngine {
-  
   /**
    * The number of mutations returned by the MutationQueue's
    * `getAllMutationBatchesAffectingQuery()` API (since the last call to
@@ -58,7 +57,10 @@ export class CountingQueryEngine implements QueryEngine {
    */
   documentsReadByKey = 0;
 
-  constructor(private readonly queryEngine: QueryEngine, readonly type: 'index-free'|'simple') {}
+  constructor(
+    private readonly queryEngine: QueryEngine,
+    readonly type: 'index-free' | 'simple'
+  ) {}
 
   resetCounts(): void {
     this.mutationsReadByQuery = 0;
