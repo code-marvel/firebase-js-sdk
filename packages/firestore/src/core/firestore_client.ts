@@ -176,7 +176,7 @@ export class FirestoreClient {
 
         this.platform
           .loadConnection(this.databaseInfo)
-          .then(connection => {
+          .then(async connection => {
             const connectivityMonitor = this.platform.newConnectivityMonitor();
             const serializer = this.platform.newSerializer(
               this.databaseInfo.databaseId
@@ -188,7 +188,7 @@ export class FirestoreClient {
               serializer
             );
 
-            return this.initializePersistence(
+            await this.initializePersistence(
               datastore,
               connectivityMonitor,
               persistenceProvider,
@@ -196,8 +196,15 @@ export class FirestoreClient {
               user,
               persistenceResult
             );
+
+            this.eventMgr = new EventManager(this.syncEngine);
+
+            // When a user calls clearPersistence() in one client, all other clients
+            // need to be terminated to allow the delete to succeed.
+            this.persistence.setDatabaseDeletedListener(async () => {
+              await this.terminate();
+            });
           })
-          .then(() => this.initializeRest(persistenceProvider))
           .then(initializationDone.resolve, initializationDone.reject);
       } else {
         this.asyncQueue.enqueueAndForget(() => {
@@ -268,6 +275,10 @@ export class FirestoreClient {
 
       this.persistence = persistenceProvider.getPersistence();
       this.sharedClientState = persistenceProvider.getSharedClientState();
+      this.localStore = persistenceProvider.getLocalStore();
+      this.remoteStore = persistenceProvider.getRemoteStore();
+      this.syncEngine = persistenceProvider.getSyncEngine();
+
       persistenceResult.resolve();
     } catch (error) {
       // Regardless of whether or not the retry succeeds, from an user
@@ -341,30 +352,6 @@ export class FirestoreClient {
         'The client has already been terminated.'
       );
     }
-  }
-
-  /**
-   * Initializes the rest of the FirestoreClient, assuming the initial user
-   * has been obtained from the credential provider and some persistence
-   * implementation is available in this.persistence.
-   */
-  private initializeRest(
-    persistenceProvider: PersistenceProvider
-  ): Promise<void> {
-    return this.platform
-      .loadConnection(this.databaseInfo)
-      .then(async connection => {
-        this.localStore = persistenceProvider.getLocalStore();
-        this.remoteStore = persistenceProvider.getRemoteStore();
-        this.syncEngine = persistenceProvider.getSyncEngine();
-        this.eventMgr = new EventManager(this.syncEngine);
-
-        // When a user calls clearPersistence() in one client, all other clients
-        // need to be terminated to allow the delete to succeed.
-        await this.persistence.setDatabaseDeletedListener(async () => {
-          await this.terminate();
-        });
-      });
   }
 
   private handleCredentialChange(user: User): Promise<void> {
